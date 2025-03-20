@@ -11,7 +11,7 @@ void main()
 {
     // Initialize the Ollama client with default host
     auto client = new OllamaClient();
-    // writeln("Ollama Client initialized with host: ", client.DEFAULT_HOST);
+    writeln("Ollama Client initialized with host: ", DEFAULT_HOST);
 
     // Set a custom timeout (optional)
     client.setTimeout(30.seconds);
