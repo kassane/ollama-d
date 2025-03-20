@@ -1,0 +1,37 @@
+name: CI
+on: [push]
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            arch: amd64
+            compiler: dmd-latest
+          - os: ubuntu-latest 
+            arch: amd64
+            compiler: ldc-latest
+          - os: ubuntu-24.04-arm 
+            arch: arm64
+            compiler: ldc-latest
+          - os: macos-latest
+            arch: arm64
+            compiler: dmd-latest
+          - os: macos-latest
+            arch: arm64
+            compiler: ldc-latest
+          - os: windows-latest
+            arch: amd64
+            compiler: dmd-latest
+          - os: windows-latest
+            arch: amd64
+            compiler: ldc-latest
+      fail-fast: false
+    runs-on: ${{matrix.os}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dlang-community/setup-dlang@v2
+        with:
+          compiler: ${{matrix.compiler}}
+      - name: Build
+        run: dub build && dub build :sample
