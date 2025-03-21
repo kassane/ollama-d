@@ -16,7 +16,7 @@ D language bindings for the Ollama REST API - Seamless integration with local AI
 
 ## Prerequisites
 
-- D language installed on your system
+- [D compiler](https://dlang.org/download.html) installed on your system
 - Ollama server running locally (default: "http://127.0.0.1:11434")
 - Installed AI model (e.g., "llama3.2")
 
