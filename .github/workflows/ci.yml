@@ -27,8 +27,11 @@ jobs:
     runs-on: ${{matrix.os}}
     steps:
       - uses: actions/checkout@v4
+      - uses: ai-action/setup-ollama@v1
       - uses: dlang-community/setup-dlang@v2
         with:
           compiler: ${{matrix.compiler}}
+      - name: Pull LLama3.1
+        run: ollama pull llama3.1:8b
       - name: Build
-        run: dub build && dub build :sample
+        run: dub build && dub run :sample
