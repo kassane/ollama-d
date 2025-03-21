@@ -2,14 +2,11 @@
 	"name": "ollama-d",
 	"description": "D bindings for the Ollama API",
 	"license": "MIT",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"targetPath": "lib",
 	"authors": [
 		"Matheus Catarino França"
 	],
-	"dependencies": {
-		"vibe-d": "~>0.10.2"
-	},
 	"dflags": [
 		"-preview=dip1000",
 		"-preview=rvaluerefparam"
@@ -29,9 +26,6 @@
 			"sourceFiles": [
 				"sample/app.d"
 			],
-			"dependencies": {
-				"vibe-d": "~>0.10.2"
-			},
 			"lflags-windows": [
 				"/LIBPATH:$PACKAGE_DIR\\lib"
 			],

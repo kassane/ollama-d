@@ -12,10 +12,8 @@
  +
  + This module defines the `OllamaClient` class, which facilitates interaction with an Ollama server
  + for tasks such as text generation, chat interactions, and model management. It supports both
- + native Ollama endpoints (e.g., `/api/generate`) and OpenAI-compatible endpoints (e.g., `/v1/chat/completions`).
- +
- + The client leverages the `vibe.d` library for HTTP requests and JSON handling, providing a robust
- + interface for integrating large language models into D applications.
+ + native Ollama endpoints and OpenAI-compatible endpoints, using `std.net.curl` for HTTP requests
+ + and `std.json` for JSON processing.
  +
  + Examples:
  +     ---
@@ -25,7 +23,7 @@
  +     void main() {
  +         auto client = new OllamaClient();
  +         auto response = client.generate("llama3", "What is the weather like?");
- +         writeln(response["response"].get!string);
+ +         writeln(response["response"].str);
  +     }
  +     ---
  +
@@ -35,14 +33,12 @@
  +/
 module ollama.client;
 
-import vibe.d;
-import std.exception : enforce;
+import std;
+
+@safe:
 
 /++
  + Represents a single message in a chat interaction.
- +
- + This struct is used to structure chat messages with a role (e.g., "user" or "assistant") and content.
- + It provides a method to convert the message into a JSON format compatible with Ollama’s API.
  +/
 struct Message
 {
@@ -52,21 +48,11 @@ struct Message
     /++
      + Converts the message to a JSON object.
      +
-     + Returns: A `Json` object with "role" and "content" fields.
-     +
-     + Examples:
-     +     ---
-     +     auto msg = Message("user", "Hello!");
-     +     auto json = msg.toJson();
-     +     assert(json["role"].get!string == "user");
-     +     assert(json["content"].get!string == "Hello!");
-     +     ---
+     + Returns: A `JSONValue` object with "role" and "content" fields.
      +/
-    Json toJson() const
+    JSONValue toJson() const
     {
-        auto j = Json.emptyObject;
-        j["role"] = role;
-        j["content"] = content;
+        JSONValue j = ["role": JSONValue(role), "content": JSONValue(content)];
         return j;
     }
 }
@@ -74,35 +60,27 @@ struct Message
 /++
  + A client class for interacting with the Ollama REST API.
  +
- + This class provides a comprehensive interface to Ollama’s functionality, including text generation,
- + chat interactions, and model management. It supports both Ollama-specific endpoints and OpenAI-compatible
- + endpoints, with configurable timeouts and basic error handling.
- +
- + Note: Streaming responses are partially supported; full implementation requires additional handling
- + of the response body.
+ + This class provides methods for text generation, chat interactions, and model management using
+ + `std.net.curl` for HTTP requests and `std.json` for JSON handling. Streaming is not fully supported
+ + in this version due to limitations in `std.net.curl`.
  +
  + Examples:
  +     ---
  +     auto client = new OllamaClient();
  +     auto chatResponse = client.chat("llama3", [Message("user", "Hi there!")]);
- +     writeln(chatResponse["message"]["content"].get!string);
+ +     writeln(chatResponse["message"]["content"].str);
  +     ---
  +/
 class OllamaClient
 {
-    private string host; /// The base URL of the Ollama server (e.g., "http://127.0.0.1:11434").
-    private Duration timeout = 60.seconds; /// Default timeout for HTTP requests in seconds.
+    private string host; /// The base URL of the Ollama server.
+    private Duration timeout = 60.seconds; /// Default timeout for HTTP requests.
 
     /++
      + Constructs a new Ollama client instance.
      +
      + Params:
      +     host = The base URL of the Ollama server. Defaults to `DEFAULT_HOST` if not specified.
-     +
-     + Examples:
-     +     ---
-     +     auto client = new OllamaClient("http://localhost:11434");
-     +     ---
      +/
     this(string host = DEFAULT_HOST)
     {
@@ -114,312 +92,223 @@ class OllamaClient
      +
      + Params:
      +     timeout = The duration to wait before timing out HTTP requests.
-     +
-     + Examples:
-     +     ---
-     +     auto client = new OllamaClient();
-     +     client.setTimeout(30.seconds);
-     +     ---
      +/
-    void setTimeout(Duration timeout)
+    void setTimeOut(Duration timeout)
     {
         this.timeout = timeout;
     }
 
-    /++ 
+    /++
      + Private helper method for performing HTTP POST requests.
      +
      + Params:
      +     url = The endpoint URL to send the request to.
      +     data = The JSON data to send in the request body.
-     +     stream = Whether to request a streaming response (not fully implemented).
+     +     stream = Whether to request a streaming response (ignored in this implementation).
      +
-     + Returns: A `Json` object with the response, or an empty object for streaming.
+     + Returns: A `JSONValue` object with the response.
      +/
-    private Json post(string url, Json data, bool stream = false)
+    private JSONValue post(string url, JSONValue data, bool stream = false) @trusted
     {
-        auto settings = new HTTPClientSettings();
-        settings.connectTimeout = timeout;
-        settings.readTimeout = timeout;
+        auto client = HTTP();
+        client.addRequestHeader("Content-Type", "application/json");
+        client.connectTimeout(timeout);
 
-        scope HTTPClientResponse response;
-        try
-        {
-            response = requestHTTP(url, (scope req) {
-                req.method = HTTPMethod.POST;
-                req.headers["Content-Type"] = "application/json";
-                req.writeJsonBody(data);
-            }, settings);
+        auto jsonStr = data.toString();
+        auto response = std.net.curl.post(url, jsonStr, client);
+        auto jsonResponse = parseJSON(response);
 
-            enforce(response.statusCode == 200, "HTTP request failed: " ~ response.statusPhrase ~ " (" ~ response
-                    .statusCode.to!string ~ ")");
-            if (stream)
-            {
-                response.dropBody();
-                return Json.emptyObject; // Placeholder for streaming
-            }
-            return response.readJson();
-        }
-        catch (Exception e)
-        {
-            throw e;
-        }
+        enforce("error" !in jsonResponse, "HTTP request failed: " ~ ("message" in jsonResponse["error"] ? jsonResponse["error"]["message"]
+                .str : "Unknown error"));
+        return jsonResponse;
     }
 
-    /++ 
+    /++
      + Private helper method for performing HTTP GET requests.
      +
      + Params:
-     +     url = The endpoint URL to send the request to*.
+     +     url = The endpoint URL to send the request to.
      +
-     + Returns: A `Json` object with the response.
+     + Returns: A `JSONValue` object with the response.
      +/
-    private Json get(string url)
+    private JSONValue get(string url) @trusted
     {
-        auto settings = new HTTPClientSettings();
-        settings.connectTimeout = timeout;
-        settings.readTimeout = timeout;
+        auto client = HTTP();
+        client.connectTimeout(timeout);
 
-        scope HTTPClientResponse response = requestHTTP(url, (scope req) {
-            req.method = HTTPMethod.GET;
-        }, settings);
-
-        enforce(response.statusCode == 200, "HTTP request failed: " ~ response.statusPhrase);
-        return response.readJson();
+        auto response = std.net.curl.get(url, client);
+        auto jsonResponse = parseJSON(response);
+        enforce("error" !in jsonResponse, "HTTP request failed: " ~ ("message" in jsonResponse["error"] ? jsonResponse["error"]["message"]
+                .str : "Unknown error"));
+        return jsonResponse;
     }
 
     /++
      + Generates text based on a prompt using the specified model.
      +
-     + This method calls the `/api/generate` endpoint for text completion.
-     +
      + Params:
      +     model = The name of the model to use (e.g., "llama3").
      +     prompt = The input text to generate from.
      +     options = Additional generation options (e.g., temperature, top_k).
-     +     stream = Whether to stream the response (not fully implemented).
+     +     stream = Whether to stream the response (ignored in this implementation).
      +
-     + Returns: A `Json` object containing the generated text and metadata.
-     +
-     + Examples:
-     +     ---
-     +     auto client = new OllamaClient();
-     +     auto response = client.generate("llama3", "Tell me a story");
-     +     writeln(response["response"].get!string);
-     +     ---
+     + Returns: A `JSONValue` object containing the generated text and metadata.
      +/
-    Json generate(string model, string prompt, Json options = Json.emptyObject, bool stream = false)
+    JSONValue generate(string model, string prompt, JSONValue options = JSONValue.init, bool stream = false)
     {
         auto url = host ~ "/api/generate";
-        auto data = Json.emptyObject;
-        data["model"] = model;
-        data["prompt"] = prompt;
-        data["options"] = options;
-        data["stream"] = stream;
+        JSONValue data = [
+            "model": JSONValue(model),
+            "prompt": JSONValue(prompt),
+            "options": options,
+            "stream": JSONValue(stream)
+        ];
         return post(url, data, stream);
     }
 
     /++
      + Engages in a chat interaction using the specified model and message history.
      +
-     + This method calls the `/api/chat` endpoint for conversational responses.
-     +
      + Params:
      +     model = The name of the model to use.
      +     messages = An array of `Message` structs representing the chat history.
      +     options = Additional chat options (e.g., temperature).
-     +     stream = Whether to stream the response (not fully implemented).
+     +     stream = Whether to stream the response (ignored in this implementation).
      +
-     + Returns: A `Json` object containing the chat response and metadata.
-     +
-     + Examples:
-     +     ---
-     +     auto client = new OllamaClient();
-     +     Message[] msgs = [Message("user", "Hi!")];
-     +     auto response = client.chat("llama3", msgs);
-     +     writeln(response["message"]["content"].get!string);
-     +     ---
+     + Returns: A `JSONValue` object containing the chat response and metadata.
      +/
-    Json chat(string model, Message[] messages, Json options = Json.emptyObject, bool stream = false)
+    JSONValue chat(string model, Message[] messages, JSONValue options = JSONValue.init, bool stream = false)
     {
         auto url = host ~ "/api/chat";
-        auto data = Json.emptyObject;
-        data["model"] = model;
-        data["messages"] = Json.emptyArray;
+        JSONValue[] msgArray;
         foreach (msg; messages)
         {
-            data["messages"] ~= msg.toJson();
+            msgArray ~= msg.toJson();
         }
-        data["options"] = options;
-        data["stream"] = stream;
+        JSONValue data = [
+            "model": JSONValue(model),
+            "messages": JSONValue(msgArray),
+            "options": options,
+            "stream": JSONValue(stream)
+        ];
         return post(url, data, stream);
     }
 
     /++
-     + Retrieves a list of available models from the Ollama server.
+     + Retrieves a list of available models from the Ollama server in a formatted JSON string.
      +
-     + This method calls the `/api/tags` endpoint.
-     +
-     + Returns: A `Json` object containing an array of model details.
-     +
-     + Examples:
-     +     ---
-     +     auto client = new OllamaClient();
-     +     auto models = client.listModels();
-     +     writeln(models["models"].toString());
-     +     ---
+     + Returns: A string containing the JSON-formatted list of model details, pretty-printed.
      +/
-    Json listModels()
+    string listModels()
     {
         auto url = host ~ "/api/tags";
-        return get(url);
+        auto jsonResponse = get(url);
+        return jsonResponse.toPrettyString(); // Adicionado: retorna JSON formatado
     }
 
     /++
-     + Retrieves detailed information about a specific model.
-     +
-     + This method calls the `/api/show` endpoint.
+     + Retrieves detailed information about a specific model in a formatted JSON string.
      +
      + Params:
      +     model = The name of the model to query.
      +
-     + Returns: A `Json` object with model metadata.
-     +
-     + Examples:
-     +     ---
-     +     auto client = new OllamaClient();
-     +     auto info = client.showModel("llama3");
-     +     writeln(info.toString());
-     +     ---
+     + Returns: A string containing the JSON-formatted model metadata, pretty-printed.
      +/
-    Json showModel(string model)
+    string showModel(string model)
     {
         auto url = host ~ "/api/show";
-        auto data = Json.emptyObject;
-        data["name"] = model;
-        return post(url, data);
+        JSONValue data = ["name": JSONValue(model)];
+        auto jsonResponse = post(url, data);
+        return jsonResponse.toPrettyString(); // Adicionado: retorna JSON formatado
     }
 
     /++
      + Creates a new model on the Ollama server using a modelfile.
      +
-     + This method calls the `/api/create` endpoint.
-     +
      + Params:
      +     name = The name of the new model.
      +     modelfile = The modelfile content defining the model.
      +
-     + Returns: A `Json` object with creation status.
-     +
-     + Examples:
-     +     ---
-     +     auto client = new OllamaClient();
-     +     auto result = client.createModel("myModel", "FROM llama3");
-     +     writeln(result.toString());
-     +     ---
+     + Returns: A `JSONValue` object with creation status.
      +/
-    Json createModel(string name, string modelfile)
+    JSONValue createModel(string name, string modelfile)
     {
         auto url = host ~ "/api/create";
-        auto data = Json.emptyObject;
-        data["name"] = name;
-        data["modelfile"] = modelfile;
+        JSONValue data = [
+            "name": JSONValue(name),
+            "modelfile": JSONValue(modelfile)
+        ];
         return post(url, data);
     }
 
     /++
      + Performs an OpenAI-style chat completion.
      +
-     + This method calls the `/v1/chat/completions` endpoint, mimicking OpenAI’s API.
-     +
      + Params:
      +     model = The name of the model to use.
      +     messages = An array of `Message` structs representing the chat history.
      +     maxTokens = Maximum number of tokens to generate (0 for unlimited).
      +     temperature = Sampling temperature (default: 1.0).
-     +     stream = Whether to stream the response (not fully implemented).
+     +     stream = Whether to stream the response (ignored in this implementation).
      +
-     + Returns: A `Json` object in OpenAI-compatible format.
-     +
-     + Examples:
-     +     ---
-     +     auto client = new OllamaClient();
-     +     Message[] msgs = [Message("user", "What’s the weather?")];
-     +     auto response = client.chatCompletions("llama3", msgs, 50, 0.7);
-     +     writeln(response["choices"][0]["message"]["content"].get!string);
-     +     ---
+     + Returns: A `JSONValue` object in OpenAI-compatible format.
      +/
-    Json chatCompletions(string model, Message[] messages, int maxTokens = 0, float temperature = 1.0, bool stream = false)
+    JSONValue chatCompletions(string model, Message[] messages, int maxTokens = 0, float temperature = 1.0, bool stream = false) @trusted
     {
         auto url = host ~ "/v1/chat/completions";
-        auto data = Json.emptyObject;
-        data["model"] = model;
-        data["messages"] = Json.emptyArray;
+        JSONValue[] msgArray;
         foreach (msg; messages)
         {
-            data["messages"] ~= msg.toJson();
+            msgArray ~= msg.toJson();
         }
+        JSONValue data = [
+            "model": JSONValue(model),
+            "messages": JSONValue(msgArray),
+            "stream": JSONValue(stream)
+        ];
         if (maxTokens > 0)
-            data["max_tokens"] = maxTokens;
-        data["temperature"] = temperature;
-        data["stream"] = stream;
+            data.object["max_tokens"] = JSONValue(maxTokens);
+        data.object["temperature"] = JSONValue(temperature);
         return post(url, data, stream);
     }
 
     /++
      + Performs an OpenAI-style text completion.
      +
-     + This method calls the `/v1/completions` endpoint, mimicking OpenAI’s API.
-     +
      + Params:
      +     model = The name of the model to use.
      +     prompt = The input prompt to complete.
      +     maxTokens = Maximum number of tokens to generate (0 for unlimited).
      +     temperature = Sampling temperature (default: 1.0).
-     +     stream = Whether to stream the response (not fully implemented).
+     +     stream = Whether to stream the response (ignored in this implementation).
      +
-     + Returns: A `Json` object in OpenAI-compatible format.
-     ~
-     + Examples:
-     +     ---
-     +     auto client = new OllamaClient();
-     +     auto response = client.completions("llama3", "Once upon a time", 100, 0.9);
-     +     writeln(response["choices"][0]["text"].get!string);
-     +     ---
+     + Returns: A `JSONValue` object in OpenAI-compatible format.
      +/
-    Json completions(string model, string prompt, int maxTokens = 0, float temperature = 1.0, bool stream = false)
+    JSONValue completions(string model, string prompt, int maxTokens = 0, float temperature = 1.0, bool stream = false) @trusted
     {
         auto url = host ~ "/v1/completions";
-        auto data = Json.emptyObject;
-        data["model"] = model;
-        data["prompt"] = prompt;
+        JSONValue data = [
+            "model": JSONValue(model),
+            "prompt": JSONValue(prompt),
+            "stream": JSONValue(stream)
+        ];
         if (maxTokens > 0)
-            data["max_tokens"] = maxTokens;
-        data["temperature"] = temperature;
-        data["stream"] = stream;
+            data.object["max_tokens"] = JSONValue(maxTokens);
+        data.object["temperature"] = JSONValue(temperature);
         return post(url, data, stream);
     }
 
     /++
      + Lists models in an OpenAI-compatible format.
      +
-     + This method calls the `/v1/models` endpoint.
-     +
-     + Returns: A `Json` object with model data in OpenAI style.
-     +
-     + Examples:
-     +     ---
-     +     auto client = new OllamaClient();
-     +     auto models = client.getModels();
-     +     writeln(models["data"].toString());
-     +     ---
+     + Returns: A `JSONValue` object with model data in OpenAI style.
      +/
-    Json getModels()
+    string getModels()
     {
         auto url = host ~ "/v1/models";
-        return get(url);
+        return get(url).toPrettyString();
     }
 }
 
-/// Default host URL for the Ollama server (http://127.0.0.1:11434).
+/// Default host URL for the Ollama server.
 enum DEFAULT_HOST = "http://127.0.0.1:11434";
