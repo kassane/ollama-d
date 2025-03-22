@@ -19,12 +19,30 @@
 	],
 	"subPackages": [
 		{
-			"name": "sample",
+			"name": "simple",
 			"targetType": "executable",
 			"targetPath": "bin",
-			"targetName": "client-sample",
+			"targetName": "client",
 			"sourceFiles": [
-				"sample/app.d"
+				"samples/simple/app.d"
+			],
+			"lflags-windows": [
+				"/LIBPATH:$PACKAGE_DIR\\lib"
+			],
+			"lflags-posix": [
+				"-L$PACKAGE_DIR/lib"
+			],
+			"libs": [
+				"ollama-d"
+			]
+		},
+		{
+			"name": "coder",
+			"targetType": "executable",
+			"targetPath": "bin",
+			"targetName": "coder",
+			"sourceFiles": [
+				"samples/coder/app.d"
 			],
 			"lflags-windows": [
 				"/LIBPATH:$PACKAGE_DIR\\lib"
