@@ -70,19 +70,16 @@ void main(string[] args) @safe
             Message("user", "Generate code: " ~ prompt)
         ];
 
-        // Call the chat endpoint to generate C code
+        // Call the chat endpoint to generate Code
         auto response = client.chat(model, messages);
 
-        // Extract the generated C code from the response
+        // Extract the generated code from the response
         string cCode = response["message"]["content"].str;
 
-        // Write the C code to the output file
+        // Write the code to the output file
         std.file.write(output, cCode);
-
-        // Output success message
         writeln("Code successfully generated and saved to ", output);
 
-        // If verbose mode is enabled, display the full API response
         if (verbose)
         {
             writeln("\nFull API Response:");
@@ -91,7 +88,6 @@ void main(string[] args) @safe
     }
     catch (Exception e)
     {
-        // Handle errors from API calls or file operations
         writeln("Error: ", e.msg);
     }
 }
