@@ -34,6 +34,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ai-action/setup-ollama@v1
+        with:
+          version: 0.6.2
       - uses: dlang-community/setup-dlang@v2
         with:
           compiler: ${{matrix.compiler}}
