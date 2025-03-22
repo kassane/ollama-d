@@ -8,7 +8,7 @@ D language bindings for the Ollama REST API - Seamless integration with local AI
 
 ## Features
 
-- Text generation with native and OpenAI-compatible endpoints
+- Text generation with native
 - Chat interactions with local AI models
 - Model management (list, create, show, pull, push, copy, delete models)
 - Configurable timeout settings
