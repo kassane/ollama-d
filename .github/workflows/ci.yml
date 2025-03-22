@@ -34,4 +34,8 @@ jobs:
       - name: Pull LLama3.1
         run: ollama pull llama3.1:8b
       - name: Build
-        run: dub build && dub run :sample
+        run: dub build -b release
+      - name: Run simple client
+        run: dub run -b release :simple
+      - name: Run coder client
+        run: dub run -b release :coder -- --prompt "Create a C function to sort an array" --model llama3.1:8b --verbose

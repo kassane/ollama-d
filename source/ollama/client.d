@@ -203,7 +203,7 @@ class OllamaClient
     {
         auto url = host ~ "/api/tags";
         auto jsonResponse = get(url);
-        return jsonResponse.toPrettyString(); // Adicionado: retorna JSON formatado
+        return jsonResponse.toPrettyString();
     }
 
     /++
@@ -219,7 +219,7 @@ class OllamaClient
         auto url = host ~ "/api/show";
         JSONValue data = ["name": JSONValue(model)];
         auto jsonResponse = post(url, data);
-        return jsonResponse.toPrettyString(); // Adicionado: retorna JSON formatado
+        return jsonResponse.toPrettyString();
     }
 
     /++
@@ -239,6 +239,92 @@ class OllamaClient
             "modelfile": JSONValue(modelfile)
         ];
         return post(url, data);
+    }
+
+    /++
+     + Copies an existing model to a new name on the Ollama server.
+     +
+     + Params:
+     +     source = The name of the model to copy from (e.g., "llama3.1:8b").
+     +     destination = The name of the new model to create (e.g., "llama3.1:8b-copy").
+     +
+     + Returns: A `JSONValue` object with the copy status.
+     +/
+    JSONValue copy(string source, string destination)
+    {
+        auto url = host ~ "/api/copy";
+        JSONValue data = [
+            "source": JSONValue(source),
+            "destination": JSONValue(destination)
+        ];
+        return post(url, data);
+    }
+
+    /++
+     + Deletes a model from the Ollama server.
+     +
+     + Params:
+     +     name = The name of the model to delete (e.g., "llama3.1:8b-copy").
+     +
+     + Returns: A `JSONValue` object with the delete status.
+     +/
+    JSONValue deleteModel(string name)
+    {
+        auto url = host ~ "/api/delete";
+        JSONValue data = [
+            "name": JSONValue(name)
+        ];
+        return post(url, data);
+    }
+
+    /++
+     + Pulls a model from the Ollama server registry.
+     +
+     + Params:
+     +     name = The name of the model to pull (e.g., "llama3").
+     +     stream = Whether to stream the response (ignored in this implementation).
+     +
+     + Returns: A `JSONValue` object with the pull status.
+     +/
+    JSONValue pull(string name, bool stream = false)
+    {
+        auto url = host ~ "/api/pull";
+        JSONValue data = [
+            "name": JSONValue(name),
+            "stream": JSONValue(stream)
+        ];
+        return post(url, data, stream);
+    }
+
+    /++
+     + Pushes a model to the Ollama server registry.
+     +
+     + Params:
+     +     name = The name of the model to push (e.g., "llama3").
+     +     stream = Whether to stream the response (ignored in this implementation).
+     +
+     + Returns: A `JSONValue` object with the push status.
+     +/
+    JSONValue push(string name, bool stream = false)
+    {
+        auto url = host ~ "/api/push";
+        JSONValue data = [
+            "name": JSONValue(name),
+            "stream": JSONValue(stream)
+        ];
+        return post(url, data, stream);
+    }
+
+    /++
+     + Retrieves the version of the Ollama server.
+     +
+     + Returns: A string containing the server version.
+     +/
+    string getVersion()
+    {
+        auto url = host ~ "/api/version";
+        auto jsonResponse = get(url);
+        return jsonResponse["version"].str; // Returns just the version string
     }
 
     /++
@@ -301,7 +387,7 @@ class OllamaClient
     /++
      + Lists models in an OpenAI-compatible format.
      +
-     + Returns: A `JSONValue` object with model data in OpenAI style.
+     + Returns: A string containing the JSON-formatted list of model data, pretty-printed.
      +/
     string getModels()
     {

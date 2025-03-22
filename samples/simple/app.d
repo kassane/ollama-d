@@ -18,6 +18,7 @@ void main() @safe
 {
     // Initialize the Ollama client with default host
     auto client = new OllamaClient();
+    writeln("\n=== Server Info ===");
     writeln("Ollama Client initialized with host: ", DEFAULT_HOST);
 
     // Set a custom timeout (optional)
@@ -25,7 +26,57 @@ void main() @safe
 
     // --- Ollama-Specific Endpoints ---
 
-    // 1. Generate text completion (non-streaming)
+    // 1. Get server version
+    try
+    {
+        writeln("\n=== Server Version ===");
+        auto serverVersion = client.getVersion;
+        writeln("Version: ", serverVersion);
+    }
+    catch (Exception e)
+    {
+        writeln("Exception in version: ", e.msg);
+    }
+
+    // 2. Pull a model
+    try
+    {
+        writeln("\n=== Pull Model ===");
+        auto pullResponse = client.pull("llama3.1:8b");
+        if ("error" in pullResponse)
+        {
+            writeln("Error: ", pullResponse["error"].str);
+        }
+        else
+        {
+            writeln("Pull Status: ", pullResponse.toPrettyString());
+        }
+    }
+    catch (Exception e)
+    {
+        writeln("Exception in pull: ", e.msg);
+    }
+
+    // 3. Push a model (assuming the model exists locally)
+    try
+    {
+        writeln("\n=== Push Model ===");
+        auto pushResponse = client.push("llama3.1:8b");
+        if ("error" in pushResponse)
+        {
+            writeln("Error: ", pushResponse["error"].str);
+        }
+        else
+        {
+            writeln("Push Status: ", pushResponse.toPrettyString());
+        }
+    }
+    catch (Exception e)
+    {
+        writeln("Exception in push: ", e.msg);
+    }
+
+    // 4. Generate text completion (non-streaming)
     try
     {
         writeln("\n=== Generate Text (Non-Streaming) ===");
@@ -45,7 +96,7 @@ void main() @safe
         writeln("Exception in generate: ", e.msg);
     }
 
-    // 2. Chat interaction (non-streaming)
+    // 5. Chat interaction (non-streaming)
     Message[] messages = [Message("user", "Hello, how are you?")];
     try
     {
@@ -66,7 +117,7 @@ void main() @safe
         writeln("Exception in chat: ", e.msg);
     }
 
-    // 3. List available models
+    // 6. List available models
     try
     {
         writeln("\n=== List Models ===");
@@ -78,7 +129,7 @@ void main() @safe
         writeln("Exception in listModels: ", e.msg);
     }
 
-    // 4. Show model information
+    // 7. Show model information
     try
     {
         writeln("\n=== Show Model Info ===");
@@ -92,7 +143,7 @@ void main() @safe
 
     // --- OpenAI-Compatible Endpoints ---
 
-    // 5. OpenAI-style chat completions (non-streaming)
+    // 8. OpenAI-style chat completions (non-streaming)
     try
     {
         writeln("\n=== OpenAI Chat Completions (Non-Streaming) ===");
@@ -112,7 +163,7 @@ void main() @safe
         writeln("Exception in chatCompletions: ", e.msg);
     }
 
-    // 6. OpenAI-style text completions (non-streaming)
+    // 9. OpenAI-style text completions (non-streaming)
     try
     {
         writeln("\n=== OpenAI Text Completions (Non-Streaming) ===");
@@ -132,7 +183,7 @@ void main() @safe
         writeln("Exception in completions: ", e.msg);
     }
 
-    // 7. OpenAI-style model listing
+    // 10. OpenAI-style model listing
     try
     {
         writeln("\n=== OpenAI List Models ===");

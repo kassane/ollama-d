@@ -10,9 +10,11 @@ D language bindings for the Ollama REST API - Seamless integration with local AI
 
 - Text generation with native and OpenAI-compatible endpoints
 - Chat interactions with local AI models
-- Model management (list, create, show models)
+- Model management (list, create, show, pull, push, copy, delete models)
 - Configurable timeout settings
 - Simple and intuitive API design using `std.net.curl` and `std.json`
+- Server version retrieval
+- OpenAI-compatible API endpoints
 
 ## Prerequisites
 
@@ -46,6 +48,10 @@ void main() {
     // OpenAI-compatible chat completions
     auto openaiResponse = client.chatCompletions("llama3.2", messages, 50, 0.7);
     writeln("OpenAI-style Response: ", openaiResponse["choices"][0]["message"]["content"].str);
+
+    // Get server version
+    auto version = client.getVersion();
+    writeln("Ollama Server Version: ", version);
 }
 ```
 
@@ -56,10 +62,15 @@ void main() {
 - `listModels()`: Retrieve available models
 - `showModel()`: Get detailed model information
 - `createModel()`: Create custom models
+- `copy()`: Copy existing models
+- `deleteModel()`: Remove models from server
+- `pull()`: Download models from registry
+- `push()`: Upload models to registry
 - `chatCompletions()`: OpenAI-compatible chat endpoint
 - `completions()`: OpenAI-compatible text completion
 - `getModels()`: List models in OpenAI-compatible format
 - `setTimeOut()`: Configure request timeout duration
+- `getVersion()`: Retrieve Ollama server version
 
 ## License
 
