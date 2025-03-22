@@ -2,7 +2,7 @@
 	"name": "ollama-d",
 	"description": "D bindings for the Ollama API",
 	"license": "MIT",
-	"version": "0.3.1",
+	"version": "0.3.2",
 	"targetPath": "lib",
 	"authors": [
 		"Matheus Catarino França"
