@@ -22,7 +22,7 @@ void main() @safe
     writeln("Ollama Client initialized with host: ", DEFAULT_HOST);
 
     // Set a custom timeout (optional)
-    client.setTimeOut(seconds(30)); // Fixed syntax from 30.seconds to seconds(30)
+    client.setTimeOut(30.seconds);
 
     // --- Ollama-Specific Endpoints ---
 
