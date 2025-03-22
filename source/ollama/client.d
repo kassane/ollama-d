@@ -242,6 +242,42 @@ class OllamaClient
     }
 
     /++
+     + Copies an existing model to a new name on the Ollama server.
+     +
+     + Params:
+     +     source = The name of the model to copy from (e.g., "llama3.1:8b").
+     +     destination = The name of the new model to create (e.g., "llama3.1:8b-copy").
+     +
+     + Returns: A `JSONValue` object with the copy status.
+     +/
+    JSONValue copy(string source, string destination)
+    {
+        auto url = host ~ "/api/copy";
+        JSONValue data = [
+            "source": JSONValue(source),
+            "destination": JSONValue(destination)
+        ];
+        return post(url, data);
+    }
+
+    /++
+     + Deletes a model from the Ollama server.
+     +
+     + Params:
+     +     name = The name of the model to delete (e.g., "llama3.1:8b-copy").
+     +
+     + Returns: A `JSONValue` object with the delete status.
+     +/
+    JSONValue deleteModel(string name)
+    {
+        auto url = host ~ "/api/delete";
+        JSONValue data = [
+            "name": JSONValue(name)
+        ];
+        return post(url, data);
+    }
+
+    /++
      + Pulls a model from the Ollama server registry.
      +
      + Params:
