@@ -42,7 +42,7 @@ jobs:
           compiler: ${{matrix.compiler}}
       - name: Pull LLama3.1
         run: ollama pull llama3.1:8b
-     - name: unittests
+      - name: unittests
         run: dub test
       - name: Build
         run: dub build -b release
