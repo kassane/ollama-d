@@ -2,7 +2,7 @@
 	"name": "ollama-d",
 	"description": "D bindings for the Ollama API",
 	"license": "MIT",
-	"version": "0.3.2",
+	"version": "0.4.0",
 	"targetPath": "lib",
 	"authors": [
 		"Matheus Catarino França"
@@ -11,48 +11,28 @@
 		"-preview=dip1000",
 		"-preview=rvaluerefparam"
 	],
-	"dflags-dmd": [
-		"-verrors=context"
-	],
-	"dflags-ldc": [
-		"--verrors-context"
-	],
+	"dflags-dmd": ["-verrors=context"],
+	"dflags-ldc": ["--verrors-context"],
 	"subPackages": [
 		{
 			"name": "simple",
 			"targetType": "executable",
 			"targetPath": "bin",
 			"targetName": "client",
-			"sourceFiles": [
-				"samples/simple/app.d"
-			],
-			"lflags-windows": [
-				"/LIBPATH:$PACKAGE_DIR\\lib"
-			],
-			"lflags-posix": [
-				"-L$PACKAGE_DIR/lib"
-			],
-			"libs": [
-				"ollama-d"
-			]
+			"sourceFiles": ["samples/simple/app.d"],
+			"lflags-windows": ["/LIBPATH:$PACKAGE_DIR\\lib"],
+			"lflags-posix": ["-L$PACKAGE_DIR/lib"],
+			"libs": ["ollama-d"]
 		},
 		{
 			"name": "coder",
 			"targetType": "executable",
 			"targetPath": "bin",
 			"targetName": "coder",
-			"sourceFiles": [
-				"samples/coder/app.d"
-			],
-			"lflags-windows": [
-				"/LIBPATH:$PACKAGE_DIR\\lib"
-			],
-			"lflags-posix": [
-				"-L$PACKAGE_DIR/lib"
-			],
-			"libs": [
-				"ollama-d"
-			]
+			"sourceFiles": ["samples/coder/app.d"],
+			"lflags-windows": ["/LIBPATH:$PACKAGE_DIR\\lib"],
+			"lflags-posix": ["-L$PACKAGE_DIR/lib"],
+			"libs": ["ollama-d"]
 		}
 	]
 }

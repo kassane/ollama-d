@@ -1,0 +1,61 @@
+# Docker Compose for local ollama-d development and testing.
+#
+# Usage:
+#   # Build and run unit tests only (no Ollama needed):
+#   docker build --target builder -t ollama-d-test .
+#   docker run --rm ollama-d-test dub test
+#
+#   # Run full integration tests with a live Ollama server:
+#   docker compose up --build
+#
+#   # Tear down and remove volumes:
+#   docker compose down -v
+
+services:
+
+  # Ollama inference server
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:11434/api/version"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  # D SDK build + integration test runner
+  test:
+    build:
+      context: .
+      target: integration
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    # Install curl for the health-check wait loop
+    # (ldc-ubuntu image may not have it by default)
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        apt-get install -y --no-install-recommends curl > /dev/null 2>&1 || true
+        until curl -sf $$OLLAMA_HOST/api/version; do
+          echo "Waiting for Ollama..."; sleep 3
+        done
+        echo "Pulling model..."
+        curl -s -X POST $$OLLAMA_HOST/api/pull -d '{"name":"llama3.1:8b","stream":false}' > /dev/null
+        echo "Running simple sample..."
+        dub run -b release :simple
+        echo "Running coder sample..."
+        dub run -b release :coder -- \
+          --prompt "Write a D function to compute fibonacci numbers" \
+          --model llama3.1:8b \
+          --host $$OLLAMA_HOST \
+          --verbose
+
+volumes:
+  ollama_data:
