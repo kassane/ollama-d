@@ -34,7 +34,7 @@ jobs:
     runs-on: ${{matrix.os}}
     steps:
       - uses: actions/checkout@main
-      - uses: ai-action/setup-ollama@v1
+      - uses: ai-action/setup-ollama@v2
         with:
           version: 0.17.6
       - uses: dlang-community/setup-dlang@v2
