@@ -37,104 +37,111 @@ import std;
 
 @safe:
 
+// ---------------------------------------------------------------------------
+// Helper: build a JSONValue object from a JSONValue[string] AA.
+// Using JSONValue(JSONValue[string]) constructor is @safe; the .object
+// property setter is @system and must be avoided in @safe code.
+// ---------------------------------------------------------------------------
+private JSONValue makeObject(JSONValue[string] fields) @safe
+{
+    return JSONValue(fields);
+}
+
 /++
  + Typed options for controlling model generation behavior.
  +
- + Only non-default (set) fields are serialized to JSON. Float fields use `float.nan` as the
- + "unset" sentinel; integer fields use `0` as unset (unless otherwise noted).
+ + Only non-default (explicitly set) fields are serialized to JSON.
+ + Float fields use `float.nan` as the "unset" sentinel; integer fields use `0`.
  +
  + Examples:
  +     ---
  +     OllamaOptions opts;
- +     opts.temperature = 0.8;
- +     opts.num_ctx = 4096;
- +     opts.stop = ["<|end|>", "\n\n"];
- +     auto response = client.generate("llama3", "Hello", JSONValue.init, false, null, null,
- +                                     JSONValue.init, null, null, opts);
+ +     opts.temperature = 0.8f;
+ +     opts.num_ctx     = 4096;
+ +     opts.stop        = ["<|end|>", "\n\n"];
  +     ---
  +/
 struct OllamaOptions
 {
-    float temperature   = float.nan; /// Sampling temperature (0.0 = deterministic, higher = more creative).
-    int   top_k         = 0;         /// Top-K sampling; 0 = disabled.
-    float top_p         = float.nan; /// Nucleus sampling probability threshold.
-    float min_p         = float.nan; /// Minimum probability threshold.
-    float repeat_penalty = float.nan; /// Penalty for repeated tokens (default server-side: 1.1).
-    int   repeat_last_n  = 0;        /// Number of last tokens considered for repeat penalty.
-    int   seed           = 0;        /// Random seed; 0 = random.
-    int   num_predict    = 0;        /// Max tokens to generate; 0 = unlimited.
-    int   num_ctx        = 0;        /// Context window size; 0 = model default.
-    string[] stop;                   /// Stop sequences; empty = disabled.
-    int   mirostat       = 0;        /// Mirostat sampling strategy (0=off, 1=v1, 2=v2).
+    float temperature    = float.nan; /// Sampling temperature (0 = deterministic).
+    int   top_k          = 0;         /// Top-K sampling; 0 = disabled.
+    float top_p          = float.nan; /// Nucleus sampling threshold.
+    float min_p          = float.nan; /// Minimum probability threshold.
+    float repeat_penalty = float.nan; /// Penalty for repeated tokens.
+    int   repeat_last_n  = 0;         /// Tokens considered for repeat penalty.
+    int   seed           = 0;         /// Random seed; 0 = random.
+    int   num_predict    = 0;         /// Max tokens to generate; 0 = unlimited.
+    int   num_ctx        = 0;         /// Context window size; 0 = model default.
+    string[] stop;                    /// Stop sequences; empty = disabled.
+    int   mirostat       = 0;         /// Mirostat strategy (0=off,1=v1,2=v2).
     float mirostat_tau   = float.nan; /// Mirostat target entropy.
     float mirostat_eta   = float.nan; /// Mirostat learning rate.
 
     /++
      + Serializes only non-default fields to a `JSONValue` object.
      +
-     + Returns: A `JSONValue` object containing only the fields that were explicitly set.
+     + Builds a `JSONValue[string]` AA (safe D operation) then wraps it.
+     +
+     + Returns: A `JSONValue` object containing only the explicitly-set fields.
      +/
     JSONValue toJson() const @safe
     {
         import std.math : isNaN;
         JSONValue[string] fields;
-        if (!isNaN(temperature))          fields["temperature"]    = JSONValue(temperature);
-        if (top_k > 0)                    fields["top_k"]          = JSONValue(top_k);
-        if (!isNaN(top_p))                fields["top_p"]          = JSONValue(top_p);
-        if (!isNaN(min_p))                fields["min_p"]          = JSONValue(min_p);
-        if (!isNaN(repeat_penalty))       fields["repeat_penalty"] = JSONValue(repeat_penalty);
-        if (repeat_last_n > 0)            fields["repeat_last_n"]  = JSONValue(repeat_last_n);
-        if (seed > 0)                     fields["seed"]           = JSONValue(seed);
-        if (num_predict > 0)              fields["num_predict"]    = JSONValue(num_predict);
-        if (num_ctx > 0)                  fields["num_ctx"]        = JSONValue(num_ctx);
-        if (!isNaN(mirostat_tau))         fields["mirostat_tau"]   = JSONValue(mirostat_tau);
-        if (!isNaN(mirostat_eta))         fields["mirostat_eta"]   = JSONValue(mirostat_eta);
-        if (mirostat > 0)                 fields["mirostat"]       = JSONValue(mirostat);
+        if (!isNaN(temperature))    fields["temperature"]    = JSONValue(temperature);
+        if (top_k > 0)              fields["top_k"]          = JSONValue(top_k);
+        if (!isNaN(top_p))          fields["top_p"]          = JSONValue(top_p);
+        if (!isNaN(min_p))          fields["min_p"]          = JSONValue(min_p);
+        if (!isNaN(repeat_penalty)) fields["repeat_penalty"] = JSONValue(repeat_penalty);
+        if (repeat_last_n > 0)      fields["repeat_last_n"]  = JSONValue(repeat_last_n);
+        if (seed > 0)               fields["seed"]           = JSONValue(seed);
+        if (num_predict > 0)        fields["num_predict"]    = JSONValue(num_predict);
+        if (num_ctx > 0)            fields["num_ctx"]        = JSONValue(num_ctx);
+        if (mirostat > 0)           fields["mirostat"]       = JSONValue(mirostat);
+        if (!isNaN(mirostat_tau))   fields["mirostat_tau"]   = JSONValue(mirostat_tau);
+        if (!isNaN(mirostat_eta))   fields["mirostat_eta"]   = JSONValue(mirostat_eta);
         if (stop.length > 0)
         {
             JSONValue[] arr;
             foreach (s; stop) arr ~= JSONValue(s);
             fields["stop"] = JSONValue(arr);
         }
-        return JSONValue(fields);
+        return makeObject(fields);
     }
 }
 
 ///
 unittest
 {
-    import std.math : isNaN;
-
-    // Default options produce an empty JSON object
+    // Default options serialize to an empty JSON object
     OllamaOptions def;
     auto j0 = def.toJson();
     assert(j0.type == JSONType.object);
-    assert(j0.object.length == 0, "Default options should serialize to empty object");
+    assert(j0.objectNoRef.length == 0, "Default OllamaOptions should be empty");
 
-    // Set individual fields
+    // Only set fields appear in output
     OllamaOptions opts;
-    opts.temperature  = 0.7f;
-    opts.top_k        = 40;
-    opts.num_ctx      = 4096;
-    opts.stop         = ["<|end|>"];
+    opts.temperature = 0.5f;  // 0.5 is exactly representable in float and double
+    opts.top_k       = 40;
+    opts.num_ctx     = 4096;
+    opts.stop        = ["<|end|>"];
     auto j = opts.toJson();
-    assert(j["temperature"].floating == 0.7f);
+    assert(j["temperature"].type == JSONType.float_);
+    assert(j["temperature"].floating == 0.5);  // exact double comparison
     assert(j["top_k"].integer == 40);
     assert(j["num_ctx"].integer == 4096);
-    assert(j["stop"].array[0].str == "<|end|>");
+    assert(j["stop"].arrayNoRef[0].str == "<|end|>");
+    assert("top_p"          !in j);
+    assert("min_p"          !in j);
+    assert("repeat_penalty" !in j);
+    assert("mirostat"       !in j);
 
-    // Unset float fields are absent
-    assert("top_p"          !in j.object);
-    assert("min_p"          !in j.object);
-    assert("repeat_penalty" !in j.object);
-    assert("mirostat"       !in j.object);
-
-    // Explicit zero temperature is included (valid value)
+    // temperature = 0.0 is a valid explicit value and must be included
     OllamaOptions zeroTemp;
     zeroTemp.temperature = 0.0f;
     auto jz = zeroTemp.toJson();
-    assert("temperature" in jz.object);
-    assert(jz["temperature"].floating == 0.0f);
+    assert("temperature" in jz);
+    assert(jz["temperature"].floating == 0.0);
 }
 
 /++
@@ -145,25 +152,28 @@ unittest
 struct ToolFunction
 {
     string    name;        /// Function name as called by the model.
-    string    description; /// Human-readable description of what the function does.
+    string    description; /// Human-readable description.
     JSONValue parameters;  /// JSON Schema object defining the function's parameters.
 
     /++
-     + Converts to a JSON object suitable for the Ollama API `tools` array.
+     + Converts to a JSON object for the Ollama API `tools` array.
      +
      + Returns: A `JSONValue` with "name", "description", and optionally "parameters".
      +/
     JSONValue toJson() const @safe
     {
-        JSONValue j = ["name": JSONValue(name), "description": JSONValue(description)];
+        JSONValue[string] fields = [
+            "name":        JSONValue(name),
+            "description": JSONValue(description),
+        ];
         if (parameters.type != JSONType.null_)
-            j.object["parameters"] = parameters;
-        return j;
+            fields["parameters"] = parameters;
+        return makeObject(fields);
     }
 }
 
 /++
- + A tool (function) definition passed to `chat()` enabling tool/function calling.
+ + A tool (function) definition passed to `chat()` to enable tool/function calling.
  +
  + Examples:
  +     ---
@@ -173,7 +183,7 @@ struct ToolFunction
  +         "required": ["location"]
  +     }`);
  +     auto tool = Tool("function", ToolFunction("get_weather", "Get current weather", schema));
- +     auto resp = client.chat("llama3", messages, [tool]);
+ +     auto resp = client.chat("llama3", messages, JSONValue.init, false, [tool]);
  +     ---
  +/
 struct Tool
@@ -188,14 +198,18 @@ struct Tool
      +/
     JSONValue toJson() const @safe
     {
-        return JSONValue(["type": JSONValue(type), "function": function_.toJson()]);
+        JSONValue[string] fields = [
+            "type":     JSONValue(type),
+            "function": function_.toJson(),
+        ];
+        return makeObject(fields);
     }
 }
 
 /++
  + Represents a tool/function call made by the model in a chat response.
  +
- + Access via `response["message"]["tool_calls"]` when the model decides to call a tool.
+ + Access via `response["message"]["tool_calls"]` when the model calls a tool.
  +/
 struct ToolCall
 {
@@ -210,13 +224,14 @@ struct ToolCall
      +/
     JSONValue toJson() const @safe
     {
-        JSONValue func = ["name": JSONValue(name)];
+        JSONValue[string] funcFields = ["name": JSONValue(name)];
         if (arguments.type != JSONType.null_)
-            func.object["arguments"] = arguments;
-        JSONValue j = ["function": func];
+            funcFields["arguments"] = arguments;
+
+        JSONValue[string] fields = ["function": makeObject(funcFields)];
         if (id.length > 0)
-            j.object["id"] = JSONValue(id);
-        return j;
+            fields["id"] = JSONValue(id);
+        return makeObject(fields);
     }
 }
 
@@ -231,23 +246,24 @@ unittest
     assert(jtf["description"].str == "Fetch weather data");
     assert(jtf["parameters"]["type"].str == "object");
 
-    // Tool serialization
+    // Tool serialization — JSON key must be "function" (not "function_")
     auto tool = Tool("function", tf);
     auto jt = tool.toJson();
     assert(jt["type"].str == "function");
+    assert("function" in jt);
     assert(jt["function"]["name"].str == "get_weather");
 
-    // ToolCall serialization
+    // ToolCall with id and arguments
     auto tc = ToolCall("call-1", "get_weather", parseJSON(`{"city":"Paris"}`));
     auto jtc = tc.toJson();
     assert(jtc["id"].str == "call-1");
     assert(jtc["function"]["name"].str == "get_weather");
     assert(jtc["function"]["arguments"]["city"].str == "Paris");
 
-    // ToolCall without id
+    // ToolCall without id — id key must be absent
     auto tc2 = ToolCall("", "sum", parseJSON(`{"a":1,"b":2}`));
     auto jtc2 = tc2.toJson();
-    assert("id" !in jtc2.object);
+    assert("id" !in jtc2);
     assert(jtc2["function"]["name"].str == "sum");
 }
 
@@ -255,7 +271,7 @@ unittest
  + Represents a single message in a chat interaction.
  +
  + Supports text, base64-encoded images (multimodal), and tool call results.
- + Backward compatible: `Message("user", "hello")` still works.
+ + Backward compatible: `Message("user", "hello")` still compiles.
  +/
 struct Message
 {
@@ -267,52 +283,56 @@ struct Message
     /++
      + Converts the message to a JSON object for the Ollama API.
      +
-     + Returns: A `JSONValue` with "role", "content", and optionally "images" and "tool_calls".
+     + Returns: A `JSONValue` with "role", "content", and optionally "images"
+     + and "tool_calls".
      +/
     JSONValue toJson() const @safe
     {
-        JSONValue j = ["role": JSONValue(role), "content": JSONValue(content)];
+        JSONValue[string] fields = [
+            "role":    JSONValue(role),
+            "content": JSONValue(content),
+        ];
         if (images.length > 0)
         {
             JSONValue[] arr;
             foreach (img; images) arr ~= JSONValue(img);
-            j.object["images"] = JSONValue(arr);
+            fields["images"] = JSONValue(arr);
         }
         if (tool_calls.length > 0)
         {
             JSONValue[] arr;
             foreach (tc; tool_calls) arr ~= tc.toJson();
-            j.object["tool_calls"] = JSONValue(arr);
+            fields["tool_calls"] = JSONValue(arr);
         }
-        return j;
+        return makeObject(fields);
     }
 }
 
 ///
 unittest
 {
-    // Basic message
+    // Basic message — no optional fields
     auto m = Message("user", "Hello, world!");
     auto j = m.toJson();
     assert(j["role"].str == "user");
     assert(j["content"].str == "Hello, world!");
-    assert("images"     !in j.object);
-    assert("tool_calls" !in j.object);
+    assert("images"     !in j);
+    assert("tool_calls" !in j);
 
     // Message with images
     auto m2 = Message("user", "What is in this image?", ["aGVsbG8="]);
     auto j2 = m2.toJson();
-    assert(j2["images"].array.length == 1);
+    assert(j2["images"].arrayNoRef.length == 1);
     assert(j2["images"][0].str == "aGVsbG8=");
 
     // Message with tool_calls
-    auto tc  = ToolCall("id-1", "search", parseJSON(`{"query":"D language"}`));
-    auto m3  = Message("assistant", "", null, [tc]);
-    auto j3  = m3.toJson();
-    assert(j3["tool_calls"].array.length == 1);
+    auto tc = ToolCall("id-1", "search", parseJSON(`{"query":"D language"}`));
+    auto m3 = Message("assistant", "", null, [tc]);
+    auto j3 = m3.toJson();
+    assert(j3["tool_calls"].arrayNoRef.length == 1);
     assert(j3["tool_calls"][0]["function"]["name"].str == "search");
 
-    // Backward compatibility: two-field struct literal
+    // Backward compatibility: two-field initialization still compiles
     Message m4;
     m4.role    = "system";
     m4.content = "You are a helpful assistant.";
@@ -323,23 +343,23 @@ unittest
 /++
  + A client class for interacting with the Ollama REST API.
  +
- + Provides methods for text generation, chat interactions, embeddings, tool calling,
- + and model management. Uses `std.net.curl` for HTTP and `std.json` for JSON.
+ + Provides methods for text generation, chat, embeddings, tool calling, and model
+ + management using `std.net.curl` for HTTP and `std.json` for JSON.
  +
  + Examples:
  +     ---
  +     auto client = new OllamaClient();
- +     auto chatResp = client.chat("llama3", [Message("user", "Hi there!")]);
- +     writeln(chatResp["message"]["content"].str);
+ +     auto resp = client.chat("llama3", [Message("user", "Hi there!")]);
+ +     writeln(resp["message"]["content"].str);
  +     ---
  +/
 class OllamaClient
 {
-    private string   host;           /// Base URL of the Ollama server.
-    private Duration timeout = 60.seconds; /// Default HTTP request timeout.
+    private string   host;
+    private Duration timeout = 60.seconds;
 
     /++
-     + Constructs a new Ollama client instance.
+     + Constructs a new Ollama client.
      +
      + Params:
      +     host = Base URL of the Ollama server. Defaults to `DEFAULT_HOST`.
@@ -350,7 +370,7 @@ class OllamaClient
     }
 
     /++
-     + Sets the timeout duration for HTTP requests.
+     + Sets the timeout for HTTP requests.
      +
      + Params:
      +     timeout = Duration to wait before timing out.
@@ -360,9 +380,9 @@ class OllamaClient
         this.timeout = timeout;
     }
 
-    // -------------------------------------------------------------------------
+    // -----------------------------------------------------------------------
     // Private HTTP helpers
-    // -------------------------------------------------------------------------
+    // -----------------------------------------------------------------------
 
     private JSONValue post(string url, JSONValue data, bool stream = false) @trusted
     {
@@ -394,10 +414,11 @@ class OllamaClient
     }
 
     /++
-     + HTTP DELETE request with a JSON body (used by `deleteModel`).
+     + HTTP DELETE with a JSON body, used by `deleteModel`.
      +
-     + Curl supports DELETE with a request body; we send the JSON payload via
-     + postData and then override the method to DELETE.
+     + The Ollama API requires HTTP DELETE for `/api/delete`. `std.net.curl` has no
+     + free `del()` function; we use the `HTTP` class directly, setting the body via
+     + `postData` and then overriding the method to DELETE.
      +/
     private JSONValue del(string url, JSONValue data) @trusted
     {
@@ -405,7 +426,6 @@ class OllamaClient
         auto http = HTTP(url);
         http.addRequestHeader("Content-Type", "application/json");
         http.connectTimeout(timeout);
-        // Set body first (internally switches to POST), then override to DELETE
         http.postData = cast(const(void)[]) jsonStr;
         http.method   = HTTP.Method.del;
 
@@ -417,33 +437,33 @@ class OllamaClient
         http.perform();
 
         if (respBuf.length == 0)
-            return JSONValue((JSONValue[string]).init); // empty 200 OK → success
+            return JSONValue((JSONValue[string]).init); // empty 200 OK = success
 
-        auto jsonResponse = parseJSON(respBuf);
-        enforce("error" !in jsonResponse,
-            "HTTP request failed: " ~ ("message" in jsonResponse["error"]
-                ? jsonResponse["error"]["message"].str : "Unknown error"));
-        return jsonResponse;
+        auto jsonResp = parseJSON(respBuf);
+        enforce("error" !in jsonResp,
+            "HTTP request failed: " ~ ("message" in jsonResp["error"]
+                ? jsonResp["error"]["message"].str : "Unknown error"));
+        return jsonResp;
     }
 
-    // -------------------------------------------------------------------------
+    // -----------------------------------------------------------------------
     // Generation
-    // -------------------------------------------------------------------------
+    // -----------------------------------------------------------------------
 
     /++
      + Generates text based on a prompt using the specified model.
      +
      + Params:
      +     model     = Model name (e.g. "llama3.1:8b").
-     +     prompt    = Input text to generate from.
+     +     prompt    = Input text.
      +     options   = Raw `JSONValue` generation options (backward-compatible).
      +     stream    = Whether to stream the response (not fully supported).
-     +     system    = Optional system prompt to prepend.
+     +     system    = Optional system prompt.
      +     images    = Optional base64-encoded images for multimodal input.
-     +     format    = Structured output schema: `JSONValue("json")` or a JSON Schema object.
+     +     format    = Structured output: `JSONValue("json")` or a JSON Schema.
      +     suffix    = Text appended after the generated response.
      +     keepAlive = How long to keep the model loaded (e.g. "5m", "0").
-     +     opts      = Typed `OllamaOptions`; overrides `options` if non-empty.
+     +     opts      = Typed `OllamaOptions`; takes precedence over `options`.
      +
      + Returns: A `JSONValue` containing `"response"`, `"done"`, and metadata.
      +/
@@ -461,38 +481,39 @@ class OllamaClient
     ) @safe
     {
         auto url = host ~ "/api/generate";
-        JSONValue data = [
+
+        JSONValue[string] fields = [
             "model":  JSONValue(model),
             "prompt": JSONValue(prompt),
             "stream": JSONValue(stream),
         ];
 
-        // Merge options: typed OllamaOptions take precedence over raw JSONValue
+        // Typed OllamaOptions takes precedence over raw JSONValue options
         auto optsJson = opts.toJson();
-        if (optsJson.object.length > 0)
-            data.object["options"] = optsJson;
+        if (optsJson.objectNoRef.length > 0)
+            fields["options"] = optsJson;
         else if (options.type != JSONType.null_)
-            data.object["options"] = options;
+            fields["options"] = options;
 
-        if (system.length    > 0) data.object["system"]     = JSONValue(system);
-        if (suffix.length    > 0) data.object["suffix"]     = JSONValue(suffix);
-        if (keepAlive.length > 0) data.object["keep_alive"] = JSONValue(keepAlive);
+        if (system.length    > 0) fields["system"]     = JSONValue(system);
+        if (suffix.length    > 0) fields["suffix"]     = JSONValue(suffix);
+        if (keepAlive.length > 0) fields["keep_alive"] = JSONValue(keepAlive);
         if (format.type != JSONType.null_)
-            data.object["format"] = format;
+            fields["format"] = format;
 
         if (images.length > 0)
         {
             JSONValue[] arr;
             foreach (img; images) arr ~= JSONValue(img);
-            data.object["images"] = JSONValue(arr);
+            fields["images"] = JSONValue(arr);
         }
 
-        return post(url, data, stream);
+        return post(url, makeObject(fields), stream);
     }
 
-    // -------------------------------------------------------------------------
+    // -----------------------------------------------------------------------
     // Chat
-    // -------------------------------------------------------------------------
+    // -----------------------------------------------------------------------
 
     /++
      + Engages in a chat interaction using the specified model and message history.
@@ -503,7 +524,7 @@ class OllamaClient
      +     options   = Raw `JSONValue` generation options (backward-compatible).
      +     stream    = Whether to stream the response (not fully supported).
      +     tools     = Optional tool definitions for tool/function calling.
-     +     format    = Structured output schema: `JSONValue("json")` or a JSON Schema.
+     +     format    = Structured output schema or `JSONValue("json")`.
      +     keepAlive = How long to keep the model loaded.
      +     opts      = Typed `OllamaOptions`.
      +
@@ -522,39 +543,40 @@ class OllamaClient
     ) @safe
     {
         auto url = host ~ "/api/chat";
+
         JSONValue[] msgArray;
         foreach (msg; messages) msgArray ~= msg.toJson();
 
-        JSONValue data = [
+        JSONValue[string] fields = [
             "model":    JSONValue(model),
             "messages": JSONValue(msgArray),
             "stream":   JSONValue(stream),
         ];
 
         auto optsJson = opts.toJson();
-        if (optsJson.object.length > 0)
-            data.object["options"] = optsJson;
+        if (optsJson.objectNoRef.length > 0)
+            fields["options"] = optsJson;
         else if (options.type != JSONType.null_)
-            data.object["options"] = options;
+            fields["options"] = options;
 
         if (keepAlive.length > 0)
-            data.object["keep_alive"] = JSONValue(keepAlive);
+            fields["keep_alive"] = JSONValue(keepAlive);
         if (format.type != JSONType.null_)
-            data.object["format"] = format;
+            fields["format"] = format;
 
         if (tools.length > 0)
         {
             JSONValue[] arr;
             foreach (t; tools) arr ~= t.toJson();
-            data.object["tools"] = JSONValue(arr);
+            fields["tools"] = JSONValue(arr);
         }
 
-        return post(url, data, stream);
+        return post(url, makeObject(fields), stream);
     }
 
-    // -------------------------------------------------------------------------
+    // -----------------------------------------------------------------------
     // Embeddings
-    // -------------------------------------------------------------------------
+    // -----------------------------------------------------------------------
 
     /++
      + Generates an embedding vector for a single text input.
@@ -569,10 +591,10 @@ class OllamaClient
     JSONValue embed(string model, string input, string keepAlive = null) @safe
     {
         auto url = host ~ "/api/embed";
-        JSONValue data = ["model": JSONValue(model), "input": JSONValue(input)];
+        JSONValue[string] fields = ["model": JSONValue(model), "input": JSONValue(input)];
         if (keepAlive.length > 0)
-            data.object["keep_alive"] = JSONValue(keepAlive);
-        return post(url, data);
+            fields["keep_alive"] = JSONValue(keepAlive);
+        return post(url, makeObject(fields));
     }
 
     /++
@@ -590,15 +612,15 @@ class OllamaClient
         auto url = host ~ "/api/embed";
         JSONValue[] arr;
         foreach (inp; inputs) arr ~= JSONValue(inp);
-        JSONValue data = ["model": JSONValue(model), "input": JSONValue(arr)];
+        JSONValue[string] fields = ["model": JSONValue(model), "input": JSONValue(arr)];
         if (keepAlive.length > 0)
-            data.object["keep_alive"] = JSONValue(keepAlive);
-        return post(url, data);
+            fields["keep_alive"] = JSONValue(keepAlive);
+        return post(url, makeObject(fields));
     }
 
-    // -------------------------------------------------------------------------
+    // -----------------------------------------------------------------------
     // Model Management
-    // -------------------------------------------------------------------------
+    // -----------------------------------------------------------------------
 
     /++
      + Lists all locally available models.
@@ -607,8 +629,7 @@ class OllamaClient
      +/
     string listModels() @safe
     {
-        auto url = host ~ "/api/tags";
-        return get(url).toPrettyString();
+        return get(host ~ "/api/tags").toPrettyString();
     }
 
     /++
@@ -621,9 +642,8 @@ class OllamaClient
      +/
     string showModel(string model) @safe
     {
-        auto url = host ~ "/api/show";
-        JSONValue data = ["name": JSONValue(model)];
-        return post(url, data).toPrettyString();
+        return post(host ~ "/api/show",
+            makeObject(["name": JSONValue(model)])).toPrettyString();
     }
 
     /++
@@ -637,9 +657,8 @@ class OllamaClient
      +/
     JSONValue createModel(string name, string modelfile) @safe
     {
-        auto url = host ~ "/api/create";
-        JSONValue data = ["name": JSONValue(name), "modelfile": JSONValue(modelfile)];
-        return post(url, data);
+        return post(host ~ "/api/create",
+            makeObject(["name": JSONValue(name), "modelfile": JSONValue(modelfile)]));
     }
 
     /++
@@ -653,9 +672,8 @@ class OllamaClient
      +/
     JSONValue copy(string source, string destination) @safe
     {
-        auto url = host ~ "/api/copy";
-        JSONValue data = ["source": JSONValue(source), "destination": JSONValue(destination)];
-        return post(url, data);
+        return post(host ~ "/api/copy",
+            makeObject(["source": JSONValue(source), "destination": JSONValue(destination)]));
     }
 
     /++
@@ -670,9 +688,7 @@ class OllamaClient
      +/
     JSONValue deleteModel(string name) @safe
     {
-        auto url = host ~ "/api/delete";
-        JSONValue data = ["name": JSONValue(name)];
-        return del(url, data);
+        return del(host ~ "/api/delete", makeObject(["name": JSONValue(name)]));
     }
 
     /++
@@ -686,9 +702,8 @@ class OllamaClient
      +/
     JSONValue pull(string name, bool stream = false) @safe
     {
-        auto url = host ~ "/api/pull";
-        JSONValue data = ["name": JSONValue(name), "stream": JSONValue(stream)];
-        return post(url, data, stream);
+        return post(host ~ "/api/pull",
+            makeObject(["name": JSONValue(name), "stream": JSONValue(stream)]), stream);
     }
 
     /++
@@ -702,14 +717,13 @@ class OllamaClient
      +/
     JSONValue push(string name, bool stream = false) @safe
     {
-        auto url = host ~ "/api/push";
-        JSONValue data = ["name": JSONValue(name), "stream": JSONValue(stream)];
-        return post(url, data, stream);
+        return post(host ~ "/api/push",
+            makeObject(["name": JSONValue(name), "stream": JSONValue(stream)]), stream);
     }
 
-    // -------------------------------------------------------------------------
+    // -----------------------------------------------------------------------
     // Server Operations
-    // -------------------------------------------------------------------------
+    // -----------------------------------------------------------------------
 
     /++
      + Retrieves the Ollama server version string.
@@ -718,24 +732,22 @@ class OllamaClient
      +/
     string getVersion() @safe
     {
-        auto url = host ~ "/api/version";
-        return get(url)["version"].str;
+        return get(host ~ "/api/version")["version"].str;
     }
 
     /++
      + Lists currently running (loaded) models.
      +
-     + Returns: Pretty-printed JSON string with model names, sizes, and expiry times.
+     + Returns: Pretty-printed JSON string with model names, sizes, and expiry.
      +/
     string ps() @safe
     {
-        auto url = host ~ "/api/ps";
-        return get(url).toPrettyString();
+        return get(host ~ "/api/ps").toPrettyString();
     }
 
-    // -------------------------------------------------------------------------
+    // -----------------------------------------------------------------------
     // OpenAI-Compatible Endpoints
-    // -------------------------------------------------------------------------
+    // -----------------------------------------------------------------------
 
     /++
      + Performs an OpenAI-style chat completion.
@@ -761,16 +773,16 @@ class OllamaClient
         JSONValue[] msgArray;
         foreach (msg; messages) msgArray ~= msg.toJson();
 
-        JSONValue data = [
-            "model":    JSONValue(model),
-            "messages": JSONValue(msgArray),
-            "stream":   JSONValue(stream),
+        JSONValue[string] fields = [
+            "model":       JSONValue(model),
+            "messages":    JSONValue(msgArray),
+            "stream":      JSONValue(stream),
+            "temperature": JSONValue(temperature),
         ];
-        data.object["temperature"] = JSONValue(temperature);
         if (maxTokens > 0)
-            data.object["max_tokens"] = JSONValue(maxTokens);
+            fields["max_tokens"] = JSONValue(maxTokens);
 
-        return post(url, data, stream);
+        return post(url, makeObject(fields), stream);
     }
 
     /++
@@ -794,16 +806,16 @@ class OllamaClient
     ) @trusted
     {
         auto url = host ~ "/v1/completions";
-        JSONValue data = [
-            "model":  JSONValue(model),
-            "prompt": JSONValue(prompt),
-            "stream": JSONValue(stream),
+        JSONValue[string] fields = [
+            "model":       JSONValue(model),
+            "prompt":      JSONValue(prompt),
+            "stream":      JSONValue(stream),
+            "temperature": JSONValue(temperature),
         ];
-        data.object["temperature"] = JSONValue(temperature);
         if (maxTokens > 0)
-            data.object["max_tokens"] = JSONValue(maxTokens);
+            fields["max_tokens"] = JSONValue(maxTokens);
 
-        return post(url, data, stream);
+        return post(url, makeObject(fields), stream);
     }
 
     /++
@@ -813,8 +825,7 @@ class OllamaClient
      +/
     string getModels() @safe
     {
-        auto url = host ~ "/v1/models";
-        return get(url).toPrettyString();
+        return get(host ~ "/v1/models").toPrettyString();
     }
 }
 

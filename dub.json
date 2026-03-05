@@ -9,7 +9,8 @@
 	],
 	"dflags": [
 		"-preview=dip1000",
-		"-preview=rvaluerefparam"
+		"-preview=rvaluerefparam",
+		"-preview=safer"
 	],
 	"dflags-dmd": ["-verrors=context"],
 	"dflags-ldc": ["--verrors-context"],
