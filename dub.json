@@ -34,6 +34,16 @@
 			"lflags-windows": ["/LIBPATH:$PACKAGE_DIR\\lib"],
 			"lflags-posix": ["-L$PACKAGE_DIR/lib"],
 			"libs": ["ollama-d"]
+		},
+		{
+			"name": "chat",
+			"targetType": "executable",
+			"targetPath": "bin",
+			"targetName": "chat",
+			"sourceFiles": ["samples/chat/app.d"],
+			"lflags-windows": ["/LIBPATH:$PACKAGE_DIR\\lib"],
+			"lflags-posix": ["-L$PACKAGE_DIR/lib"],
+			"libs": ["ollama-d"]
 		}
 	]
 }
