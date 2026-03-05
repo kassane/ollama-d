@@ -33,7 +33,7 @@ enum DEFAULT_SYSTEM = "You are a helpful, concise assistant.";
 private void    flushOut() @trusted { stdout.flush(); }
 private string  nextLine() @trusted { return readln(); }
 
-void main(string[] args) @trusted
+void main(string[] args) @safe
 {
     // ── CLI arguments ──────────────────────────────────────────────────────
     string model      = DEFAULT_MODEL;
