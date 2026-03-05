@@ -340,6 +340,11 @@ unittest
     assert(j4["role"].str == "system");
 }
 
+/// Callback type used by the streaming methods.
+/// Receives one fully-parsed NDJSON chunk per call; `chunk["done"]` is
+/// `true` on the final chunk.
+alias StreamCallback = void delegate(JSONValue chunk) @safe;
+
 /++
  + A client class for interacting with the Ollama REST API.
  +
@@ -446,6 +451,43 @@ class OllamaClient
         return jsonResp;
     }
 
+    /++
+     + Low-level streaming POST helper.
+     +
+     + Sends `data` to `url` and dispatches each newline-delimited JSON chunk
+     + to `onChunk` as it arrives, enabling token-by-token streaming from
+     + `/api/generate` and `/api/chat`.
+     +/
+    private void postStream(string url, JSONValue data,
+        StreamCallback onChunk) @trusted
+    {
+        auto jsonStr = data.toString();
+        auto http = HTTP(url);
+        http.addRequestHeader("Content-Type", "application/json");
+        http.connectTimeout(timeout);
+        http.postData = cast(const(void)[]) jsonStr;
+
+        char[] lineBuf;
+        http.onReceive = (ubyte[] chunk) {
+            lineBuf ~= cast(char[]) chunk;
+            size_t start = 0;
+            foreach (i; 0 .. lineBuf.length)
+            {
+                if (lineBuf[i] == '\n')
+                {
+                    if (i > start)
+                        onChunk(parseJSON(lineBuf[start .. i]));
+                    start = i + 1;
+                }
+            }
+            lineBuf = lineBuf[start .. $].dup;
+            return chunk.length;
+        };
+        http.perform();
+        if (lineBuf.length > 0)
+            onChunk(parseJSON(lineBuf));
+    }
+
     // -----------------------------------------------------------------------
     // Generation
     // -----------------------------------------------------------------------
@@ -511,6 +553,54 @@ class OllamaClient
         return post(url, makeObject(fields), stream);
     }
 
+    /++
+     + Streaming text generation — calls `onChunk` for every response token.
+     +
+     + Each call to `onChunk` receives one NDJSON chunk. The chunk contains a
+     + `"response"` string token and a boolean `"done"`. The final chunk has
+     + `"done": true` and carries usage/timing metadata.
+     +
+     + Params:
+     +     model     = Model name (e.g. "llama3.1:8b").
+     +     prompt    = Input prompt.
+     +     onChunk   = Callback invoked per chunk; must be `@safe`.
+     +     system    = Optional system prompt.
+     +     images    = Optional base64-encoded images (multimodal).
+     +     format    = Structured output: `JSONValue("json")` or JSON Schema.
+     +     keepAlive = How long to keep the model loaded.
+     +     opts      = Typed generation options.
+     +/
+    void generateStream(
+        string        model,
+        string        prompt,
+        StreamCallback onChunk,
+        string        system    = null,
+        string[]      images    = null,
+        JSONValue     format    = JSONValue.init,
+        string        keepAlive = null,
+        OllamaOptions opts      = OllamaOptions.init,
+    ) @safe
+    {
+        auto url = host ~ "/api/generate";
+        JSONValue[string] fields = [
+            "model":  JSONValue(model),
+            "prompt": JSONValue(prompt),
+            "stream": JSONValue(true),
+        ];
+        auto optsJson = opts.toJson();
+        if (optsJson.objectNoRef.length > 0) fields["options"]    = optsJson;
+        if (system.length    > 0)            fields["system"]     = JSONValue(system);
+        if (keepAlive.length > 0)            fields["keep_alive"] = JSONValue(keepAlive);
+        if (format.type != JSONType.null_)   fields["format"]     = format;
+        if (images.length > 0)
+        {
+            JSONValue[] arr;
+            foreach (img; images) arr ~= JSONValue(img);
+            fields["images"] = JSONValue(arr);
+        }
+        postStream(url, makeObject(fields), onChunk);
+    }
+
     // -----------------------------------------------------------------------
     // Chat
     // -----------------------------------------------------------------------
@@ -572,6 +662,53 @@ class OllamaClient
         }
 
         return post(url, makeObject(fields), stream);
+    }
+
+    /++
+     + Streaming chat — calls `onChunk` for every assistant token.
+     +
+     + Each chunk contains `"message": {"role": "assistant", "content": "<token>"}`.
+     + The final chunk has `"done": true` and carries usage metadata.
+     +
+     + Params:
+     +     model     = Model name.
+     +     messages  = Conversation history.
+     +     onChunk   = Callback invoked per chunk; must be `@safe`.
+     +     tools     = Optional tool definitions.
+     +     format    = Structured output schema or `JSONValue("json")`.
+     +     keepAlive = How long to keep the model loaded.
+     +     opts      = Typed generation options.
+     +/
+    void chatStream(
+        string        model,
+        Message[]     messages,
+        StreamCallback onChunk,
+        Tool[]        tools     = null,
+        JSONValue     format    = JSONValue.init,
+        string        keepAlive = null,
+        OllamaOptions opts      = OllamaOptions.init,
+    ) @safe
+    {
+        auto url = host ~ "/api/chat";
+        JSONValue[] msgArray;
+        foreach (msg; messages) msgArray ~= msg.toJson();
+
+        JSONValue[string] fields = [
+            "model":    JSONValue(model),
+            "messages": JSONValue(msgArray),
+            "stream":   JSONValue(true),
+        ];
+        auto optsJson = opts.toJson();
+        if (optsJson.objectNoRef.length > 0) fields["options"]    = optsJson;
+        if (keepAlive.length > 0)            fields["keep_alive"] = JSONValue(keepAlive);
+        if (format.type != JSONType.null_)   fields["format"]     = format;
+        if (tools.length > 0)
+        {
+            JSONValue[] arr;
+            foreach (t; tools) arr ~= t.toJson();
+            fields["tools"] = JSONValue(arr);
+        }
+        postStream(url, makeObject(fields), onChunk);
     }
 
     // -----------------------------------------------------------------------
@@ -743,6 +880,34 @@ class OllamaClient
     string ps() @safe
     {
         return get(host ~ "/api/ps").toPrettyString();
+    }
+
+    /++
+     + Searches the Ollama model registry at ollama.com.
+     +
+     + Queries the unofficial but stable `https://ollama.com/api/models` endpoint
+     + that backs the `https://ollama.com/search` web UI. No official REST API
+     + exists for model discovery; this uses the undocumented endpoint.
+     +
+     + Params:
+     +     query = Search term (e.g. "llama3", "code", "vision").
+     +     limit = Maximum number of results (default 20, max ~100).
+     +     sort  = Sort order: "popular" (default), "newest", "updated".
+     +
+     + Returns: A `JSONValue` array of model objects, each with at minimum
+     +          `"name"`, `"description"`, `"pull_count"`, and `"updated_at"`.
+     +/
+    JSONValue searchModels(string query, int limit = 20,
+        string sort = "popular") @trusted
+    {
+        import std.uri : encodeComponent;
+        auto url = "https://ollama.com/api/models?q=" ~ encodeComponent(query)
+                   ~ "&limit=" ~ to!string(limit)
+                   ~ "&sort="  ~ sort;
+        auto http = HTTP();
+        http.connectTimeout(timeout);
+        auto response = std.net.curl.get(url, http);
+        return parseJSON(response);
     }
 
     // -----------------------------------------------------------------------

@@ -245,4 +245,58 @@ void main() @safe
         writeln(client.getModels());
     }
     catch (Exception e) { writeln("Exception in getModels: ", e.msg); }
+
+    // -------------------------------------------------------------------------
+    // 17. Streaming text generation (token-by-token)
+    // -------------------------------------------------------------------------
+    try
+    {
+        writeln("\n=== Streaming Generate ===");
+        write("Response: ");
+        client.generateStream(
+            "llama3.1:8b",
+            "Count from 1 to 5, one number per line.",
+            (JSONValue chunk) @safe {
+                if (!chunk["done"].get!bool)
+                    write(chunk["response"].str);
+                else
+                    writeln("\n[done — tokens generated]");
+            },
+        );
+    }
+    catch (Exception e) { writeln("Exception in generateStream: ", e.msg); }
+
+    // -------------------------------------------------------------------------
+    // 18. Streaming chat (token-by-token)
+    // -------------------------------------------------------------------------
+    try
+    {
+        writeln("\n=== Streaming Chat ===");
+        Message[] streamMsgs = [Message("user", "What is 2 + 2? Be brief.")];
+        write("Assistant: ");
+        client.chatStream(
+            "llama3.1:8b",
+            streamMsgs,
+            (JSONValue chunk) @safe {
+                if (!chunk["done"].get!bool)
+                    write(chunk["message"]["content"].str);
+                else
+                    writeln("\n[done]");
+            },
+        );
+    }
+    catch (Exception e) { writeln("Exception in chatStream: ", e.msg); }
+
+    // -------------------------------------------------------------------------
+    // 19. Model registry search (ollama.com)
+    // -------------------------------------------------------------------------
+    try
+    {
+        writeln("\n=== Model Registry Search ===");
+        auto results = client.searchModels("llama3", 5);
+        writeln("Top 5 'llama3' models on ollama.com:");
+        foreach (m; results["models"].arrayNoRef)
+            writeln("  ", m["name"].str);
+    }
+    catch (Exception e) { writeln("Exception in searchModels: ", e.msg); }
 }
