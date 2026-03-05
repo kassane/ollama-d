@@ -11,6 +11,7 @@
  +/
 
 import ollama;
+import std.json;
 import std.stdio;
 import core.time;
 
@@ -161,10 +162,10 @@ void main() @safe
         auto toolMessages = [Message("user", "What is the weather in Paris in celsius?")];
         auto r = client.chat("llama3.1:8b", toolMessages, JSONValue.init, false, tools);
 
-        if ("tool_calls" in r["message"].object)
+        if ("tool_calls" in r["message"].objectNoRef)
         {
             writeln("Model wants to call tools:");
-            foreach (tc; r["message"]["tool_calls"].array)
+            foreach (tc; r["message"]["tool_calls"].arrayNoRef)
                 writeln("  Function: ", tc["function"]["name"].str,
                         " Args: ", tc["function"]["arguments"].toString());
         }
@@ -182,10 +183,10 @@ void main() @safe
     {
         writeln("\n=== Embeddings (single) ===");
         auto r = client.embed("llama3.1:8b", "The quick brown fox jumps over the lazy dog.");
-        auto vecs = r["embeddings"].array;
+        auto vecs = r["embeddings"].arrayNoRef;
         writeln("Number of embedding vectors: ", vecs.length);
         if (vecs.length > 0)
-            writeln("First vector length: ", vecs[0].array.length);
+            writeln("First vector length: ", vecs[0].arrayNoRef.length);
     }
     catch (Exception e) { writeln("Exception in embed (single): ", e.msg); }
 
@@ -196,7 +197,7 @@ void main() @safe
     {
         writeln("\n=== Embeddings (batch) ===");
         auto r = client.embed("llama3.1:8b", ["Hello world", "D is great", "Ollama rocks"]);
-        writeln("Batch embedding count: ", r["embeddings"].array.length);
+        writeln("Batch embedding count: ", r["embeddings"].arrayNoRef.length);
     }
     catch (Exception e) { writeln("Exception in embed (batch): ", e.msg); }
 
