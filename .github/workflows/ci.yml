@@ -49,4 +49,4 @@ jobs:
       - name: Run agent
         run: dub run -b release :agent -- "What is the current UTC time? Also, what is 123 plus 456?"
       - name: Run coder client
-        run: dub run -b release :coder -- --prompt "Create a C function to sort an array" --model qwen3.5:2b --verbose
+        run: dub run -b release :coder -- --prompt "Create a C function to sort an array" --model qwen3.5:9b --verbose
