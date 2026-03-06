@@ -126,9 +126,9 @@ void runAgent(OllamaClient client, string model, string question) @safe
 
 void main(string[] args) @safe
 {
-    string model    = "qwen3.5:2b";
+    string model    = "qwen3.5:4b";
     string host     = DEFAULT_HOST;
-    string question = "What is the current UTC time? Also, what is 123 plus 456?";
+    string question = "What is the current UTC time? Also, what is llm?";
 
     for (int i = 1; i < args.length; i++)
     {
