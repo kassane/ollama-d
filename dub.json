@@ -44,6 +44,16 @@
 			"lflags-windows": ["/LIBPATH:$PACKAGE_DIR\\lib"],
 			"lflags-posix": ["-L$PACKAGE_DIR/lib"],
 			"libs": ["ollama-d"]
+		},
+		{
+			"name": "agent",
+			"targetType": "executable",
+			"targetPath": "bin",
+			"targetName": "agent",
+			"sourceFiles": ["samples/agent/app.d"],
+			"lflags-windows": ["/LIBPATH:$PACKAGE_DIR\\lib"],
+			"lflags-posix": ["-L$PACKAGE_DIR/lib"],
+			"libs": ["ollama-d"]
 		}
 	]
 }

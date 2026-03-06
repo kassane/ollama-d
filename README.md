@@ -20,6 +20,7 @@ D language bindings for the Ollama REST API — seamless integration with local 
 - Configurable timeout settings
 - Built-in unit test suite (`dub test`)
 - OpenAI-compatible API endpoints (`/v1/…`)
+- **Agentic tool-calling loop** — execute local functions and feed results back to the model
 - Docker-based local development environment
 - Zero external dependencies — only `std.net.curl` and `std.json`
 
@@ -125,13 +126,13 @@ writeln(batch["embeddings"].array.length); // 2 vectors
 ### Model Management
 
 ```d
-string   listModels()                            // GET  /api/tags
-string   showModel(string model)                 // POST /api/show
-JSONValue createModel(string name, string file)  // POST /api/create
-JSONValue copy(string src, string dst)           // POST /api/copy
-JSONValue deleteModel(string name)               // DELETE /api/delete
-JSONValue pull(string name, bool stream = false) // POST /api/pull
-JSONValue push(string name, bool stream = false) // POST /api/push
+string    listModels()                            // GET    /api/tags
+string    showModel(string model)                 // POST   /api/show
+JSONValue createModel(string name, string file)   // POST   /api/create
+JSONValue copy(string src, string dst)            // POST   /api/copy
+JSONValue deleteModel(string name)                // DELETE /api/delete
+JSONValue pull(string name, bool stream = false)  // POST   /api/pull
+JSONValue push(string name, bool stream = false)  // POST   /api/push (requires registry auth)
 ```
 
 ### Server
@@ -153,6 +154,40 @@ JSONValue completions(string model, string prompt,
 string getModels()  // GET /v1/models
 ```
 
+### Agentic Tool-Calling Loop
+
+```d
+// Define tools
+auto tools = [
+    Tool("function", ToolFunction("add", "Add two numbers",
+        parseJSON(`{"type":"object","properties":{"a":{"type":"number"},"b":{"type":"number"}},"required":["a","b"]}`))),
+];
+
+// Dispatch tool calls locally
+JSONValue callTool(string name, JSONValue args) @safe
+{
+    if (name == "add") return JSONValue(args["a"].get!double + args["b"].get!double);
+    return JSONValue("Unknown tool");
+}
+
+// Agentic loop
+Message[] history = [Message("user", "What is 7 plus 8?")];
+for (;;)
+{
+    auto r  = client.chat("llama3.1:8b", history, JSONValue.init, false, tools);
+    auto msg = r["message"];
+    auto tcs = "tool_calls" in msg.objectNoRef;
+    if (!tcs || (*tcs).arrayNoRef.length == 0) { writeln(msg["content"].str); break; }
+
+    history ~= Message("assistant", "content" in msg ? msg["content"].str : "");
+    foreach (tc; (*tcs).arrayNoRef)
+    {
+        auto result = callTool(tc["function"]["name"].str, tc["function"]["arguments"]);
+        history ~= Message("tool", result.toString);
+    }
+}
+```
+
 ### OllamaOptions
 
 ```d
@@ -167,6 +202,15 @@ opts.seed          = 42;     // Reproducible output
 opts.stop          = ["</s>", "\n\n"];  // Stop sequences
 ```
 
+## Samples
+
+| Sample  | Description |
+|---------|-------------|
+| `simple` | Full SDK tour — generation, chat, embeddings, tool calling, streaming, OpenAI-compatible endpoints |
+| `chat`   | Interactive multi-turn chatbot with streaming output and Qwen3 thinking mode |
+| `coder`  | CLI code generator — streams a chat response and saves the result to a file |
+| `agent`  | Agentic tool-calling loop — the model calls local functions until it has a final answer |
+
 ## Running Tests
 
 ```bash
@@ -176,7 +220,10 @@ dub test
 # Build and run samples against a live server
 dub build -b release
 dub run -b release :simple
-dub run -b release :coder -- --prompt "Sort a list in D" --model llama3.2
+dub run -b release :agent -- "What time is it and what is 7 plus 8?"
+dub run -b release :agent -- --model llama3.1:8b "Convert 'hello world' to upper case"
+dub run -b release :coder -- --prompt "Sort a list in D" --model llama3.1:8b
+dub run -b release :chat  -- --model qwen3:0.6b
 ```
 
 ## Docker
