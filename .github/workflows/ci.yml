@@ -14,6 +14,9 @@ jobs:
         include:
           - os: ubuntu-latest
             arch: amd64
+            compiler: dmd-latest
+          - os: ubuntu-latest
+            arch: amd64
             compiler: ldc-latest
           - os: ubuntu-24.04-arm
             arch: arm64
@@ -21,6 +24,9 @@ jobs:
           - os: macos-latest
             arch: arm64
             compiler: ldc-latest
+          - os: windows-latest
+            arch: amd64
+            compiler: dmd-latest
           - os: windows-latest
             arch: amd64
             compiler: ldc-latest
