@@ -7,7 +7,7 @@
  +
  + Examples:
  +     coder --prompt "Create a C function to sort an array" --output sort.c --verbose
- +     coder --prompt "Write a Java program to calculate fibonacci numbers" --model qwen3.5:2b
+ +     coder --prompt "Write a Java program to calculate fibonacci numbers" --model qwen3.5:7b
  +/
 import ollama;
 import std;
@@ -15,7 +15,7 @@ import std;
 void main(string[] args) @safe
 {
     string prompt;
-    string model;
+    string model  = "qwen3.5:7b";
     string output = "generated.md";
     string host   = DEFAULT_HOST;
     bool   verbose;
@@ -34,12 +34,12 @@ void main(string[] args) @safe
         }
     }
 
-    if (prompt.empty || model.empty)
+    if (prompt.empty)
     {
         writefln(
-            "Usage: coder --prompt \"your prompt\" --model <model> " ~
+            "Usage: coder --prompt \"your prompt\" [--model %s] " ~
             "[--output %s] [--host %s] [--verbose]",
-            output, host);
+            model, output, host);
         return;
     }
 

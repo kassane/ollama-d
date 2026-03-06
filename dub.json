@@ -9,11 +9,10 @@
 	],
 	"dflags": [
 		"-preview=dip1000",
-		"-preview=rvaluerefparam",
-		"-preview=safer"
+		"-preview=rvaluerefparam"
 	],
 	"dflags-dmd": ["-verrors=context"],
-	"dflags-ldc": ["--verrors-context"],
+	"dflags-ldc": ["--verrors-context", "--preview=safer"],
 	"subPackages": [
 		{
 			"name": "simple",
