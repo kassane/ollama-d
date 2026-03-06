@@ -7,7 +7,7 @@
  +
  + Examples:
  +     coder --prompt "Create a C function to sort an array" --output sort.c --verbose
- +     coder --prompt "Write a Java program to calculate fibonacci numbers" --model llama3.1:8b
+ +     coder --prompt "Write a Java program to calculate fibonacci numbers" --model qwen3.5:2b
  +/
 import ollama;
 import std;

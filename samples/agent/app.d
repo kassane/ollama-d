@@ -14,10 +14,10 @@
  +
  + Prerequisites:
  +     - Ollama server on http://127.0.0.1:11434  (ollama serve)
- +     - A tool-capable model, e.g. llama3.1:8b   (ollama pull llama3.1:8b)
+ +     - A tool-capable model, e.g. qwen3.5:2b   (ollama pull qwen3.5:2b)
  +
  + Usage:
- +     agent [--model llama3.1:8b] [--host http://…] ["your question"]
+ +     agent [--model qwen3.5:2b] [--host http://…] ["your question"]
  +/
 import ollama;
 import std;
@@ -126,7 +126,7 @@ void runAgent(OllamaClient client, string model, string question) @safe
 
 void main(string[] args) @safe
 {
-    string model    = "llama3.1:8b";
+    string model    = "qwen3.5:2b";
     string host     = DEFAULT_HOST;
     string question = "What is the current UTC time? Also, what is 123 plus 456?";
 
