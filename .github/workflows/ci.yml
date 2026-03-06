@@ -14,7 +14,7 @@ jobs:
         include:
           - os: ubuntu-latest
             arch: amd64
-            compiler: dmd-latest
+            compiler: dmd-master
           - os: ubuntu-latest 
             arch: amd64
             compiler: ldc-latest
@@ -26,7 +26,7 @@ jobs:
             compiler: ldc-latest
           - os: windows-latest
             arch: amd64
-            compiler: dmd-latest
+            compiler: dmd-master
           - os: windows-latest
             arch: amd64
             compiler: ldc-latest
@@ -40,8 +40,6 @@ jobs:
       - uses: dlang-community/setup-dlang@v2
         with:
           compiler: ${{matrix.compiler}}
-      - name: Pull Qwen3.5
-        run: ollama pull qwen3.5:2b
       - name: unittests
         run: dub test
       - name: Build
