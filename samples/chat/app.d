@@ -1,5 +1,5 @@
 /++
- + Interactive multi-turn chatbot powered by Qwen3 0.6B via Ollama.
+ + Interactive multi-turn chatbot powered by Qwen3.5 0.8B via Ollama.
  +
  + Demonstrates:
  +   - Streaming output (tokens appear character-by-character)
@@ -7,11 +7,11 @@
  +   - Qwen3 thinking mode (`/think` — chain-of-thought reasoning)
  +   - System prompt customisation at startup
  +
- + The default model is `qwen3.5:0.6b` — tiny (~500 MB), CPU-friendly,
+ + The default model is `qwen3.5:0.8b` — tiny (~500 MB), CPU-friendly,
  + fast enough for interactive use. Override with `--model`.
  +
  + Usage:
- +     chat [--model qwen3.5:0.6b] [--host http://127.0.0.1:11434]
+ +     chat [--model qwen3.5:0.8b] [--host http://127.0.0.1:11434]
  +          [--system "You are…"] [--think]
  +
  + In-session commands:
@@ -24,7 +24,7 @@ import ollama;
 import std;
 
 // ── Model defaults ─────────────────────────────────────────────────────────
-enum DEFAULT_MODEL  = "qwen3.5:0.6b";
+enum DEFAULT_MODEL  = "qwen3.5:0.8b";
 enum DEFAULT_SYSTEM = "You are a helpful, concise assistant.";
 
 // stdout.flush() and readln() access __gshared stdin/stdout under

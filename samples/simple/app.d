@@ -3,7 +3,7 @@
  +
  + Prerequisites:
  +     - Ollama server on http://127.0.0.1:11434  (ollama serve)
- +     - Model qwen3.5:7b installed              (ollama pull qwen3.5:7b)
+ +     - Model llama3.1:8b installed              (ollama pull llama3.1:8b)
  +/
 import ollama;
 import std;
@@ -29,12 +29,12 @@ void main() @safe
         writeln("running : ", client.ps());
     });
 
-    section("Pull qwen3.5:7b", () {
-        writeln(client.pull("qwen3.5:7b")["status"].str);
+    section("Pull llama3.1:8b", () {
+        writeln(client.pull("llama3.1:8b")["status"].str);
     });
 
     // ── Generate ─────────────────────────────────────────────────────────────
-    enum model = "qwen3.5:7b";
+    enum model = "llama3.1:8b";
 
     section("Generate — basic", () {
         writeln(client.generate(model, "Why is the sky blue?")["response"].str);
