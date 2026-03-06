@@ -882,33 +882,6 @@ class OllamaClient
         return get(host ~ "/api/ps").toPrettyString();
     }
 
-    /++
-     + Searches the Ollama model registry at ollama.com.
-     +
-     + Queries the unofficial but stable `https://ollama.com/api/models` endpoint
-     + that backs the `https://ollama.com/search` web UI. No official REST API
-     + exists for model discovery; this uses the undocumented endpoint.
-     +
-     + Params:
-     +     query = Search term (e.g. "llama3", "code", "vision").
-     +     limit = Maximum number of results (default 20, max ~100).
-     +     sort  = Sort order: "popular" (default), "newest", "updated".
-     +
-     + Returns: A `JSONValue` array of model objects, each with at minimum
-     +          `"name"`, `"description"`, `"pull_count"`, and `"updated_at"`.
-     +/
-    JSONValue searchModels(string query, int limit = 20,
-        string sort = "popular") @trusted
-    {
-        import std.uri : encodeComponent;
-        auto url = "https://ollama.com/api/models?q=" ~ encodeComponent(query)
-                   ~ "&limit=" ~ to!string(limit)
-                   ~ "&sort="  ~ sort;
-        auto http = HTTP();
-        http.connectTimeout(timeout);
-        auto response = std.net.curl.get(url, http);
-        return parseJSON(response);
-    }
 
     // -----------------------------------------------------------------------
     // OpenAI-Compatible Endpoints

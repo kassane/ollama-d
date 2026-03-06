@@ -202,18 +202,7 @@ void main() @safe
     catch (Exception e) { writeln("Exception in embed (batch): ", e.msg); }
 
     // -------------------------------------------------------------------------
-    // 13. Push a model (may fail without registry auth)
-    // -------------------------------------------------------------------------
-    try
-    {
-        writeln("\n=== Push Model ===");
-        auto r = client.push("llama3.1:8b");
-        writeln("Push Status: ", r.toPrettyString());
-    }
-    catch (Exception e) { writeln("Exception in push (expected without auth): ", e.msg); }
-
-    // -------------------------------------------------------------------------
-    // 14. OpenAI-compatible chat completions
+    // 13. OpenAI-compatible chat completions
     // -------------------------------------------------------------------------
     try
     {
@@ -225,7 +214,7 @@ void main() @safe
     catch (Exception e) { writeln("Exception in chatCompletions: ", e.msg); }
 
     // -------------------------------------------------------------------------
-    // 15. OpenAI-compatible text completions
+    // 14. OpenAI-compatible text completions
     // -------------------------------------------------------------------------
     try
     {
@@ -237,7 +226,7 @@ void main() @safe
     catch (Exception e) { writeln("Exception in completions: ", e.msg); }
 
     // -------------------------------------------------------------------------
-    // 16. OpenAI-compatible model listing
+    // 15. OpenAI-compatible model listing
     // -------------------------------------------------------------------------
     try
     {
@@ -247,7 +236,7 @@ void main() @safe
     catch (Exception e) { writeln("Exception in getModels: ", e.msg); }
 
     // -------------------------------------------------------------------------
-    // 17. Streaming text generation (token-by-token)
+    // 16. Streaming text generation (token-by-token)
     // -------------------------------------------------------------------------
     try
     {
@@ -267,7 +256,7 @@ void main() @safe
     catch (Exception e) { writeln("Exception in generateStream: ", e.msg); }
 
     // -------------------------------------------------------------------------
-    // 18. Streaming chat (token-by-token)
+    // 17. Streaming chat (token-by-token)
     // -------------------------------------------------------------------------
     try
     {
@@ -287,16 +276,4 @@ void main() @safe
     }
     catch (Exception e) { writeln("Exception in chatStream: ", e.msg); }
 
-    // -------------------------------------------------------------------------
-    // 19. Model registry search (ollama.com)
-    // -------------------------------------------------------------------------
-    try
-    {
-        writeln("\n=== Model Registry Search ===");
-        auto results = client.searchModels("llama3", 5);
-        writeln("Top 5 'llama3' models on ollama.com:");
-        foreach (m; results["models"].arrayNoRef)
-            writeln("  ", m["name"].str);
-    }
-    catch (Exception e) { writeln("Exception in searchModels: ", e.msg); }
 }
