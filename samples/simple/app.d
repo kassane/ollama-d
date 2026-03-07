@@ -1,197 +1,135 @@
 /++
- + Example application demonstrating the usage of the `OllamaClient` class.
- +
- + This module provides a comprehensive example of how to use the `OllamaClient` to interact with
- + an Ollama server, including text generation, chat interactions, model management, and OpenAI-compatible
- + endpoints.
+ + Quick tour of the OllamaClient SDK.
  +
  + Prerequisites:
- +     - Ollama server must be running on `http://127.0.0.1:11434` (start with `ollama serve`).
- +     - The model "llama3.1:8b" must be installed (e.g., `ollama pull llama3.1:8b`).
+ +     - Ollama server on http://127.0.0.1:11434  (ollama serve)
+ +     - Model llama3.1:8b installed              (ollama pull llama3.1:8b)
  +/
-
 import ollama;
-import std.stdio; // for writeln
-import core.time; // for seconds
+import std;
+
+/// Run `body` inside a titled banner, printing any exception as an error line.
+void section(string title, scope void delegate() @safe body) @safe
+{
+    writefln("\n=== %s ===", title);
+    try   body();
+    catch (Exception e) writefln("  error: %s", e.msg);
+}
 
 void main() @safe
 {
-    // Initialize the Ollama client with default host
     auto client = new OllamaClient();
-    writeln("\n=== Server Info ===");
-    writeln("Ollama Client initialized with host: ", DEFAULT_HOST);
+    client.setTimeOut(120.seconds);
+    writeln("host: ", DEFAULT_HOST);
 
-    // Set a custom timeout (optional)
-    client.setTimeOut(30.seconds);
+    // ── Server ───────────────────────────────────────────────────────────────
+    section("Server", () {
+        writeln("version : ", client.getVersion());
+        writeln("models  : ", client.listModels());
+        writeln("running : ", client.ps());
+    });
 
-    // --- Ollama-Specific Endpoints ---
+    section("Pull llama3.1:8b", () {
+        writeln(client.pull("llama3.1:8b")["status"].str);
+    });
 
-    // 1. Get server version
-    try
-    {
-        writeln("\n=== Server Version ===");
-        auto serverVersion = client.getVersion;
-        writeln("Version: ", serverVersion);
-    }
-    catch (Exception e)
-    {
-        writeln("Exception in version: ", e.msg);
-    }
+    // ── Generate ─────────────────────────────────────────────────────────────
+    enum model = "llama3.1:8b";
 
-    // 2. Pull a model
-    try
-    {
-        writeln("\n=== Pull Model ===");
-        auto pullResponse = client.pull("llama3.1:8b");
-        if ("error" in pullResponse)
-        {
-            writeln("Error: ", pullResponse["error"].str);
-        }
+    section("Generate — basic", () {
+        writeln(client.generate(model, "Why is the sky blue?")["response"].str);
+    });
+
+    section("Generate — system prompt + options", () {
+        OllamaOptions opts;
+        opts.temperature = 0.5f;
+        opts.num_predict = 80;
+        auto r = client.generate(model,
+            "One fun fact about D programming.",
+            JSONValue.init, false,
+            "You are a concise technical writer. Reply in one sentence.",
+            null, JSONValue.init, null, null, opts);
+        writeln(r["response"].str);
+    });
+
+    section("Generate — structured JSON", () {
+        auto r = client.generate(model,
+            "Capital and population of France as JSON.",
+            JSONValue.init, false, null, null, JSONValue("json"));
+        writeln(r["response"].str);
+    });
+
+    // ── Chat ─────────────────────────────────────────────────────────────────
+    section("Chat", () {
+        auto r = client.chat(model, [Message("user", "Hello!")]);
+        writeln(r["message"]["content"].str);
+    });
+
+    section("Chat — tool calling", () {
+        auto schema = parseJSON(`{
+            "type": "object",
+            "properties": {
+                "location": {"type": "string", "description": "City name"},
+                "unit":     {"type": "string", "enum": ["celsius","fahrenheit"]}
+            },
+            "required": ["location"]
+        }`);
+        auto tools = [Tool("function",
+            ToolFunction("get_current_weather",
+                "Get the current weather for a location", schema))];
+        auto r = client.chat(model,
+            [Message("user", "What is the weather in Paris in celsius?")],
+            JSONValue.init, false, tools);
+        if (auto tc = "tool_calls" in r["message"].objectNoRef)
+            foreach (c; (*tc).arrayNoRef)
+                writefln("  call %s(%s)",
+                    c["function"]["name"].str,
+                    c["function"]["arguments"].toString);
         else
-        {
-            writeln("Pull Status: ", pullResponse.toPrettyString());
-        }
-    }
-    catch (Exception e)
-    {
-        writeln("Exception in pull: ", e.msg);
-    }
+            writeln(r["message"]["content"].str);
+    });
 
-    // 3. Push a model (assuming the model exists locally)
-    try
-    {
-        writeln("\n=== Push Model ===");
-        auto pushResponse = client.push("llama3.1:8b");
-        if ("error" in pushResponse)
-        {
-            writeln("Error: ", pushResponse["error"].str);
-        }
-        else
-        {
-            writeln("Push Status: ", pushResponse.toPrettyString());
-        }
-    }
-    catch (Exception e)
-    {
-        writeln("Exception in push: ", e.msg);
-    }
+    // ── Embeddings ───────────────────────────────────────────────────────────
+    section("Embeddings", () {
+        auto vecs = client.embed(model, "The quick brown fox.")["embeddings"].arrayNoRef;
+        writefln("  single vector length : %d", vecs[0].arrayNoRef.length);
 
-    // 4. Generate text completion (non-streaming)
-    try
-    {
-        writeln("\n=== Generate Text (Non-Streaming) ===");
-        auto generateResponse = client.generate("llama3.1:8b", "Why is the sky blue?");
-        if ("error" in generateResponse)
-        {
-            writeln("Error: ", generateResponse["error"].str);
-        }
-        else
-        {
-            writeln("Response: ", generateResponse["response"].str);
-            writeln("Done: ", generateResponse["done"].get!bool);
-        }
-    }
-    catch (Exception e)
-    {
-        writeln("Exception in generate: ", e.msg);
-    }
+        auto batch = client.embed(model, ["Hello world", "D is great", "Ollama rocks"]);
+        writefln("  batch count          : %d", batch["embeddings"].arrayNoRef.length);
+    });
 
-    // 5. Chat interaction (non-streaming)
-    Message[] messages = [Message("user", "Hello, how are you?")];
-    try
-    {
-        writeln("\n=== Chat Interaction (Non-Streaming) ===");
-        auto chatResponse = client.chat("llama3.1:8b", messages);
-        if ("error" in chatResponse)
-        {
-            writeln("Error: ", chatResponse["error"].str);
-        }
-        else
-        {
-            writeln("Response: ", chatResponse["message"]["content"].str);
-            writeln("Done: ", chatResponse["done"].get!bool);
-        }
-    }
-    catch (Exception e)
-    {
-        writeln("Exception in chat: ", e.msg);
-    }
+    // ── OpenAI-compatible ─────────────────────────────────────────────────────
+    section("OpenAI — chat completions", () {
+        auto r = client.chatCompletions(model, [Message("user", "Hello!")], 50, 0.7f);
+        writefln("  %s  (model: %s)",
+            r["choices"][0]["message"]["content"].str, r["model"].str);
+    });
 
-    // 6. List available models
-    try
-    {
-        writeln("\n=== List Models ===");
-        auto models = client.listModels();
-        writeln("Models: ", models);
-    }
-    catch (Exception e)
-    {
-        writeln("Exception in listModels: ", e.msg);
-    }
+    section("OpenAI — text completions", () {
+        auto r = client.completions(model, "Once upon a time", 60, 0.9f);
+        writefln("  %s  (model: %s)", r["choices"][0]["text"].str, r["model"].str);
+    });
 
-    // 7. Show model information
-    try
-    {
-        writeln("\n=== Show Model Info ===");
-        auto modelInfo = client.showModel("llama3.1:8b");
-        writeln("Model Info: ", modelInfo);
-    }
-    catch (Exception e)
-    {
-        writeln("Exception in showModel: ", e.msg);
-    }
+    section("OpenAI — list models", () {
+        writeln(client.getModels());
+    });
 
-    // --- OpenAI-Compatible Endpoints ---
+    // ── Streaming ─────────────────────────────────────────────────────────────
+    section("Stream — generate", () {
+        write("  ");
+        client.generateStream(model, "Count from 1 to 5, one per line.",
+            (JSONValue chunk) @safe {
+                if (!chunk["done"].get!bool) write(chunk["response"].str);
+                else writeln("\n  [done]");
+            });
+    });
 
-    // 8. OpenAI-style chat completions (non-streaming)
-    try
-    {
-        writeln("\n=== OpenAI Chat Completions (Non-Streaming) ===");
-        auto chatCompResponse = client.chatCompletions("llama3.1:8b", messages, 50, 0.7);
-        if ("error" in chatCompResponse)
-        {
-            writeln("Error: ", chatCompResponse["error"].str);
-        }
-        else
-        {
-            writeln("Choice: ", chatCompResponse["choices"][0]["message"]["content"].str);
-            writeln("Model: ", chatCompResponse["model"].str);
-        }
-    }
-    catch (Exception e)
-    {
-        writeln("Exception in chatCompletions: ", e.msg);
-    }
-
-    // 9. OpenAI-style text completions (non-streaming)
-    try
-    {
-        writeln("\n=== OpenAI Text Completions (Non-Streaming) ===");
-        auto compResponse = client.completions("llama3.1:8b", "Once upon a time", 100, 0.9);
-        if ("error" in compResponse)
-        {
-            writeln("Error: ", compResponse["error"].str);
-        }
-        else
-        {
-            writeln("Text: ", compResponse["choices"][0]["text"].str);
-            writeln("Model: ", compResponse["model"].str);
-        }
-    }
-    catch (Exception e)
-    {
-        writeln("Exception in completions: ", e.msg);
-    }
-
-    // 10. OpenAI-style model listing
-    try
-    {
-        writeln("\n=== OpenAI List Models ===");
-        auto openaiModels = client.getModels();
-        writeln("Models: ", openaiModels);
-    }
-    catch (Exception e)
-    {
-        writeln("Exception in getModels: ", e.msg);
-    }
+    section("Stream — chat", () {
+        write("  ");
+        client.chatStream(model, [Message("user", "What is 2+2? Be brief.")],
+            (JSONValue chunk) @safe {
+                if (!chunk["done"].get!bool) write(chunk["message"]["content"].str);
+                else writeln("\n  [done]");
+            });
+    });
 }

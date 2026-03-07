@@ -15,10 +15,10 @@ jobs:
           - os: ubuntu-latest
             arch: amd64
             compiler: dmd-latest
-          - os: ubuntu-latest 
+          - os: ubuntu-latest
             arch: amd64
             compiler: ldc-latest
-          - os: ubuntu-24.04-arm 
+          - os: ubuntu-24.04-arm
             arch: arm64
             compiler: ldc-latest
           - os: macos-latest
@@ -40,11 +40,13 @@ jobs:
       - uses: dlang-community/setup-dlang@v2
         with:
           compiler: ${{matrix.compiler}}
-      - name: Pull LLama3.1
-        run: ollama pull llama3.1:8b
+      - name: unittests
+        run: dub test
       - name: Build
         run: dub build -b release
       - name: Run simple client
         run: dub run -b release :simple
+      - name: Run agent
+        run: dub run -b release :agent -- "What is the current UTC time? Also, what is 123 plus 456?"
       - name: Run coder client
-        run: dub run -b release :coder -- --prompt "Create a C function to sort an array" --model llama3.1:8b --verbose
+        run: dub run -b release :coder -- --prompt "Create a C function to sort an array" --verbose

@@ -1,0 +1,106 @@
+# Docker Compose for ollama-d development, integration testing, and the
+# Open WebUI chatbot dashboard.
+#
+# Services:
+#   ollama   — Ollama inference server (GPU pass-through optional).
+#   webui    — Open WebUI: chatbot frontend + realtime system/model dashboard.
+#   test     — D SDK build + integration test runner (one-shot).
+#
+# Usage:
+#   # Start Ollama + Open WebUI only (chatbot at http://localhost:3000):
+#   docker compose up ollama webui
+#
+#   # Run full integration tests (builds SDK, runs samples against Ollama):
+#   docker compose up --build
+#
+#   # Tear down and remove volumes:
+#   docker compose down -v
+
+services:
+
+  # ── Ollama inference server ────────────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    # Uncomment for NVIDIA GPU pass-through:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:11434/api/version"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    restart: unless-stopped
+
+  # ── Open WebUI — chatbot + realtime dashboard ──────────────────────────────
+  # Provides:
+  #   • Full chat interface with model selection and history
+  #   • Admin dashboard: realtime CPU/memory usage, GPU stats, model status
+  #   • Model management: pull/delete models from the UI
+  #   • OpenAI-compatible API passthrough
+  #
+  # Access at:  http://localhost:3000
+  # Admin panel: http://localhost:3000/admin/settings
+  webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    ports:
+      - "3000:8080"
+    volumes:
+      - open_webui_data:/app/backend/data
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+      # Disable login prompt for local development:
+      WEBUI_AUTH: "False"
+    depends_on:
+      ollama:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # ── D SDK build + integration test runner ─────────────────────────────────
+  test:
+    build:
+      context: .
+      target: integration
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        apt-get install -y --no-install-recommends curl > /dev/null 2>&1 || true
+        until curl -sf $$OLLAMA_HOST/api/version; do
+          echo "Waiting for Ollama..."; sleep 3
+        done
+        echo "Pulling model..."
+        curl -s -X POST $$OLLAMA_HOST/api/pull \
+          -d '{"name":"llama3.1:8b","stream":false}' > /dev/null
+        echo "Running simple sample (includes streaming + search)..."
+        dub run -b release :simple
+        echo "Running coder sample (streaming)..."
+        dub run -b release :coder -- \
+          --prompt "Write a D function to compute fibonacci numbers" \
+          --model llama3.1:8b \
+          --host $$OLLAMA_HOST \
+          --verbose
+
+volumes:
+  ollama_data:
+  open_webui_data:
