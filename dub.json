@@ -7,6 +7,7 @@
 	"authors": [
 		"Matheus Catarino França"
 	],
+	"libs": ["curl"],
 	"dflags": [
 		"-preview=dip1000",
 		"-preview=rvaluerefparam",
@@ -21,9 +22,9 @@
 			"targetPath": "bin",
 			"targetName": "client",
 			"sourceFiles": ["samples/simple/app.d"],
+			"libs": ["ollama-d", "curl"],
 			"lflags-windows": ["/LIBPATH:$PACKAGE_DIR\\lib"],
-			"lflags-posix": ["-L$PACKAGE_DIR/lib"],
-			"libs": ["ollama-d"]
+			"lflags-posix": ["-L$PACKAGE_DIR/lib"]
 		},
 		{
 			"name": "coder",
@@ -31,9 +32,9 @@
 			"targetPath": "bin",
 			"targetName": "coder",
 			"sourceFiles": ["samples/coder/app.d"],
+			"libs": ["ollama-d", "curl"],
 			"lflags-windows": ["/LIBPATH:$PACKAGE_DIR\\lib"],
-			"lflags-posix": ["-L$PACKAGE_DIR/lib"],
-			"libs": ["ollama-d"]
+			"lflags-posix": ["-L$PACKAGE_DIR/lib"]
 		},
 		{
 			"name": "chat",
@@ -41,9 +42,9 @@
 			"targetPath": "bin",
 			"targetName": "chat",
 			"sourceFiles": ["samples/chat/app.d"],
+			"libs": ["ollama-d", "curl"],
 			"lflags-windows": ["/LIBPATH:$PACKAGE_DIR\\lib"],
-			"lflags-posix": ["-L$PACKAGE_DIR/lib"],
-			"libs": ["ollama-d"]
+			"lflags-posix": ["-L$PACKAGE_DIR/lib"]
 		},
 		{
 			"name": "agent",
@@ -51,9 +52,9 @@
 			"targetPath": "bin",
 			"targetName": "agent",
 			"sourceFiles": ["samples/agent/app.d"],
+			"libs": ["ollama-d", "curl"],
 			"lflags-windows": ["/LIBPATH:$PACKAGE_DIR\\lib"],
-			"lflags-posix": ["-L$PACKAGE_DIR/lib"],
-			"libs": ["ollama-d"]
+			"lflags-posix": ["-L$PACKAGE_DIR/lib"]
 		}
 	]
 }

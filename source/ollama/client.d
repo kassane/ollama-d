@@ -12,8 +12,8 @@
  +
  + This module defines the `OllamaClient` class, which facilitates interaction with an Ollama server
  + for tasks such as text generation, chat interactions, model management, embeddings, and tool calling.
- + It supports both native Ollama endpoints and OpenAI-compatible endpoints, using `std.net.curl` for
- + HTTP requests and `std.json` for JSON processing.
+ + It supports both native Ollama endpoints and OpenAI-compatible endpoints, using `etc.c.curl`
+ + (libcurl C API) for HTTP requests and `std.json` for JSON processing.
  +
  + Examples:
  +     ---
@@ -33,7 +33,12 @@
  +/
 module ollama.client;
 
-import std;
+import std.json      : JSONValue, JSONType, parseJSON;
+import std.exception : enforce;
+import std.string    : toStringz, fromStringz;
+import std.datetime  : Duration, seconds;
+import std.math      : isNaN;
+import etc.c.curl;
 
 @safe:
 
@@ -345,11 +350,54 @@ unittest
 /// `true` on the final chunk.
 alias StreamCallback = void delegate(JSONValue chunk) @safe;
 
+// ---------------------------------------------------------------------------
+// libcurl C-API write callbacks — must be extern(C) nothrow @system.
+// Using etc.c.curl directly avoids importing std.net.curl, whose D wrappers
+// fail to compile under -preview=safer + -preview=dip1000 on DMD because
+// unannotated Phobos functions become @safe by default and then fail
+// __gshared / DIP1000 checks inside their bodies.
+// ---------------------------------------------------------------------------
+private struct _CurlBuf    { char[] data; }
+private struct _CurlStream { char[] line; StreamCallback cb; }
+
+extern(C) private @system nothrow
+size_t _curlWriteBuf(char* p, size_t sz, size_t n, void* ud)
+{
+    try { (*cast(_CurlBuf*)ud).data ~= p[0 .. sz * n]; }
+    catch (Throwable) {}
+    return sz * n;
+}
+
+extern(C) private @system nothrow
+size_t _curlWriteStream(char* p, size_t sz, size_t n, void* ud)
+{
+    try
+    {
+        auto sd = cast(_CurlStream*)ud;
+        sd.line ~= p[0 .. sz * n];
+        size_t start = 0;
+        foreach (i; 0 .. sd.line.length)
+        {
+            if (sd.line[i] == '\n')
+            {
+                if (i > start)
+                    try { sd.cb(parseJSON(sd.line[start .. i].idup)); }
+                    catch (Exception) {}
+                start = i + 1;
+            }
+        }
+        if (start > 0)
+            sd.line = sd.line[start .. $].dup;
+    }
+    catch (Throwable) {}
+    return sz * n;
+}
+
 /++
  + A client class for interacting with the Ollama REST API.
  +
  + Provides methods for text generation, chat, embeddings, tool calling, and model
- + management using `std.net.curl` for HTTP and `std.json` for JSON.
+ + management using `etc.c.curl` (libcurl C API) for HTTP and `std.json` for JSON.
  +
  + Examples:
  +     ---
@@ -386,69 +434,99 @@ class OllamaClient
     }
 
     // -----------------------------------------------------------------------
-    // Private HTTP helpers
+    // Private curl helpers — @trusted wrappers around the C libcurl API.
+    // Using etc.c.curl directly (not std.net.curl) sidesteps Phobos template
+    // compilation errors under -preview=safer + -preview=dip1000 on DMD.
     // -----------------------------------------------------------------------
+    private auto _curlInit(string url) @trusted
+    {
+        auto curl = curl_easy_init();
+        enforce(curl !is null, "curl_easy_init failed");
+        curl_easy_setopt(curl, CurlOption.url,      url.toStringz);
+        curl_easy_setopt(curl, CurlOption.timeout_ms,
+                         cast(long) timeout.total!"msecs");
+        return curl;
+    }
+
+    private JSONValue _curlFinish(CURL* curl, ref _CurlBuf buf) @trusted
+    {
+        auto rc = curl_easy_perform(curl);
+        enforce(rc == CurlError.ok,
+            "curl: " ~ fromStringz(curl_easy_strerror(rc)).idup);
+        auto j = parseJSON(cast(string) buf.data);
+        enforce("error" !in j,
+            "HTTP request failed: " ~ ("message" in j["error"]
+                ? j["error"]["message"].str : "Unknown error"));
+        return j;
+    }
 
     private JSONValue post(string url, JSONValue data, bool stream = false) @trusted
     {
-        auto client = HTTP();
-        client.addRequestHeader("Content-Type", "application/json");
-        client.connectTimeout(timeout);
+        immutable js = data.toString();
+        auto curl = _curlInit(url);
+        scope(exit) curl_easy_cleanup(curl);
 
-        auto jsonStr = data.toString();
-        auto response = std.net.curl.post(url, jsonStr, client);
-        auto jsonResponse = parseJSON(response);
+        curl_slist* hdrs;
+        hdrs = curl_slist_append(hdrs, "Content-Type: application/json");
+        scope(exit) curl_slist_free_all(hdrs);
 
-        enforce("error" !in jsonResponse,
-            "HTTP request failed: " ~ ("message" in jsonResponse["error"]
-                ? jsonResponse["error"]["message"].str : "Unknown error"));
-        return jsonResponse;
+        _CurlBuf buf;
+        curl_easy_setopt(curl, CurlOption.post,          1L);
+        curl_easy_setopt(curl, CurlOption.postfields,    js.ptr);
+        curl_easy_setopt(curl, CurlOption.postfieldsize, cast(long) js.length);
+        curl_easy_setopt(curl, CurlOption.httpheader,    hdrs);
+        curl_easy_setopt(curl, CurlOption.writefunction, &_curlWriteBuf);
+        curl_easy_setopt(curl, CurlOption.writedata,     &buf);
+        return _curlFinish(curl, buf);
     }
 
     private JSONValue get(string url) @trusted
     {
-        auto client = HTTP();
-        client.connectTimeout(timeout);
+        auto curl = _curlInit(url);
+        scope(exit) curl_easy_cleanup(curl);
 
-        auto response = std.net.curl.get(url, client);
-        auto jsonResponse = parseJSON(response);
-        enforce("error" !in jsonResponse,
-            "HTTP request failed: " ~ ("message" in jsonResponse["error"]
-                ? jsonResponse["error"]["message"].str : "Unknown error"));
-        return jsonResponse;
+        _CurlBuf buf;
+        curl_easy_setopt(curl, CurlOption.writefunction, &_curlWriteBuf);
+        curl_easy_setopt(curl, CurlOption.writedata,     &buf);
+        return _curlFinish(curl, buf);
     }
 
     /++
      + HTTP DELETE with a JSON body, used by `deleteModel`.
      +
-     + The Ollama API requires HTTP DELETE for `/api/delete`. `std.net.curl` has no
-     + free `del()` function; we use the `HTTP` class directly, setting the body via
-     + `postData` and then overriding the method to DELETE.
+     + The Ollama API requires HTTP DELETE for `/api/delete`. We use libcurl's
+     + CURLOPT_CUSTOMREQUEST to send DELETE with a request body.
      +/
     private JSONValue del(string url, JSONValue data) @trusted
     {
-        auto jsonStr = data.toString();
-        auto http = HTTP(url);
-        http.addRequestHeader("Content-Type", "application/json");
-        http.connectTimeout(timeout);
-        http.postData = cast(const(void)[]) jsonStr;
-        http.method   = HTTP.Method.del;
+        immutable js = data.toString();
+        auto curl = _curlInit(url);
+        scope(exit) curl_easy_cleanup(curl);
 
-        char[] respBuf;
-        http.onReceive = (ubyte[] chunk) {
-            respBuf ~= cast(char[]) chunk;
-            return chunk.length;
-        };
-        http.perform();
+        curl_slist* hdrs;
+        hdrs = curl_slist_append(hdrs, "Content-Type: application/json");
+        scope(exit) curl_slist_free_all(hdrs);
 
-        if (respBuf.length == 0)
+        _CurlBuf buf;
+        curl_easy_setopt(curl, CurlOption.customrequest, "DELETE".toStringz);
+        curl_easy_setopt(curl, CurlOption.postfields,    js.ptr);
+        curl_easy_setopt(curl, CurlOption.postfieldsize, cast(long) js.length);
+        curl_easy_setopt(curl, CurlOption.httpheader,    hdrs);
+        curl_easy_setopt(curl, CurlOption.writefunction, &_curlWriteBuf);
+        curl_easy_setopt(curl, CurlOption.writedata,     &buf);
+
+        auto rc = curl_easy_perform(curl);
+        enforce(rc == CurlError.ok,
+            "curl: " ~ fromStringz(curl_easy_strerror(rc)).idup);
+
+        if (buf.data.length == 0)
             return JSONValue((JSONValue[string]).init); // empty 200 OK = success
 
-        auto jsonResp = parseJSON(respBuf);
-        enforce("error" !in jsonResp,
-            "HTTP request failed: " ~ ("message" in jsonResp["error"]
-                ? jsonResp["error"]["message"].str : "Unknown error"));
-        return jsonResp;
+        auto j = parseJSON(cast(string) buf.data);
+        enforce("error" !in j,
+            "HTTP request failed: " ~ ("message" in j["error"]
+                ? j["error"]["message"].str : "Unknown error"));
+        return j;
     }
 
     /++
@@ -461,31 +539,28 @@ class OllamaClient
     private void postStream(string url, JSONValue data,
         StreamCallback onChunk) @trusted
     {
-        auto jsonStr = data.toString();
-        auto http = HTTP(url);
-        http.addRequestHeader("Content-Type", "application/json");
-        http.connectTimeout(timeout);
-        http.postData = cast(const(void)[]) jsonStr;
+        immutable js = data.toString();
+        auto curl = _curlInit(url);
+        scope(exit) curl_easy_cleanup(curl);
 
-        char[] lineBuf;
-        http.onReceive = (ubyte[] chunk) {
-            lineBuf ~= cast(char[]) chunk;
-            size_t start = 0;
-            foreach (i; 0 .. lineBuf.length)
-            {
-                if (lineBuf[i] == '\n')
-                {
-                    if (i > start)
-                        onChunk(parseJSON(lineBuf[start .. i]));
-                    start = i + 1;
-                }
-            }
-            lineBuf = lineBuf[start .. $].dup;
-            return chunk.length;
-        };
-        http.perform();
-        if (lineBuf.length > 0)
-            onChunk(parseJSON(lineBuf));
+        curl_slist* hdrs;
+        hdrs = curl_slist_append(hdrs, "Content-Type: application/json");
+        scope(exit) curl_slist_free_all(hdrs);
+
+        auto sd = _CurlStream(null, onChunk);
+        curl_easy_setopt(curl, CurlOption.post,          1L);
+        curl_easy_setopt(curl, CurlOption.postfields,    js.ptr);
+        curl_easy_setopt(curl, CurlOption.postfieldsize, cast(long) js.length);
+        curl_easy_setopt(curl, CurlOption.httpheader,    hdrs);
+        curl_easy_setopt(curl, CurlOption.writefunction, &_curlWriteStream);
+        curl_easy_setopt(curl, CurlOption.writedata,     &sd);
+
+        auto rc = curl_easy_perform(curl);
+        enforce(rc == CurlError.ok,
+            "curl: " ~ fromStringz(curl_easy_strerror(rc)).idup);
+
+        if (sd.line.length > 0)
+            try { onChunk(parseJSON(sd.line.idup)); } catch (Exception) {}
     }
 
     // -----------------------------------------------------------------------
