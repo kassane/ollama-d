@@ -3,6 +3,7 @@
 [![Static Badge](https://img.shields.io/badge/v2.110.0%20(stable)-f8240e?logo=d&logoColor=f8240e&label=runtime)](https://dlang.org/download.html)
 ![Latest release](https://img.shields.io/github/v/release/kassane/ollama-d?include_prereleases&label=latest)
 [![Artifacts](https://github.com/kassane/ollama-d/actions/workflows/ci.yml/badge.svg)](https://github.com/kassane/ollama-d/actions/workflows/ci.yml)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/kassane/ollama-d)
 
 D language bindings for the Ollama REST API — seamless integration with local AI models.
 
